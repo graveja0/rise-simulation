@@ -1,0 +1,25 @@
+param,type,value,range,description,common_drug_rare_serious_ade,common_drug_common_sig_ade,rare_drug_common_serious_ade,rare_drug_rare_serious_ade
+vGene,risk,0.2,,prevalence of targeted gene variant (at least one copy),0.2,0.2,0.2,0.2
+vRiskA,risk,0.2,,probability of event A (drug indication),0.1,0.1,0.02,0.02
+vDurationA,risk,10,,time frame for event A (year),10,10,10,10
+vRiskB,risk,0.5,,risk of event B (downstream adverse event),0.02,0.1,0.1,0.02
+vDurationB,risk,3,,time frame for event B (year),1,1,1,1
+vRR_B,risk,0.5,,relative risk for event B with better treatment informed by genotyping,0.7,0.7,0.7,0.7
+vFatalB,risk,0.1,,case fatality for event B,0.05,0.01,0.05,0.01
+A,disutility,0.2,,disutility for event A,0.05,0.05,0.05,0.05
+B_Survive,disutility,0.15,,disutility for event B,0.1,0.04,0.1,0.2
+B_Death,disutility,100/30,,disutility for death,1,1,1,1
+A,duration,3*365,,temporary disutility duration for event A (day),365,365,365,365
+A_c,cost,10000,,cost for event A,10000,10000,10000,10000
+B_Survive,cost,25000,,cost for event B survival,25000,1000,25000,25000
+B_Death,cost,15000,,cost for event B death,15000,15000,15000,15000
+rx,cost,100/30,,daily cost for usual treatment,0.5,0.5,0.5,0.5
+alt,cost,300/30,,daily cost for alternative treatment,5,5,5,5
+single_test,cost,100,,cost for single test,100,100,100,100
+A,type,1,,type (0=permanent; 1=temporary),1,1,1,1
+A_c,type,0,,???,0,0,0,0
+B_Survive,type,0,,???,0,0,0,0
+B_Death,type,0,,???,0,0,0,0
+sceular)death,type,0,,???,0,0,0,0
+vProbabilityOrder,risk,0.5,,probability of ordering,0.5,0.5,0.5,0.5
+vProbabilityRead,risk,0.5,,probability of reading,0.5,0.5,0.5,0.5
