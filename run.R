@@ -1,6 +1,4 @@
-setwd("../simple_scaleable")
 rm(list=ls())
-# source("./sub-files/read-in-scenarios.R")
 source("./sub-files/main_file.R")
 source("./sub-files/costs_simple.R")
 
@@ -10,7 +8,7 @@ attributes <- NULL
 
 #can modify here
 inputs$vHorizon <- 10
-inputs$vN <- 1000
+inputs$vN <- 10
 inputs$vAge <- 40
 
 for(preemptive in c("None","Panel"))
@@ -44,5 +42,5 @@ s2 <- cost.qaly(subset(results,preemptive=="None"&reactive=="Single"),inputs) %>
 s3 <- cost.qaly(subset(results,preemptive=="None"&reactive=="Panel"),inputs) %>% mutate(strategy="Reactive Panel")
 s4 <- cost.qaly(subset(results,preemptive=="Panel"&reactive=="None"),inputs) %>% mutate(strategy="Preemptive Panel")
 
-sum_costs <- rbind(s1,s2,s3,s4) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
+sum_costs <- rbind(s1,s2,s3,s4) %>% arrange(dQALY) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
 sum_costs

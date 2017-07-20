@@ -1,19 +1,63 @@
-# This file reads in the CSV file of the scenarios.
+set.seed(23)
 
-scenarios <- read.csv("./simple-pgx-scenario-parameters.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
-#scenarios <- scenarios %>% select(1:6)
-scenario.names <- scenarios %>% select(-param,-type,-value,-range,-description) %>% names()
+scenarios <- read.csv("./simple-pgx-scenario-parameters-psa.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
+scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()
 scenario.ids <- paste0("sc_",letters[1:length(scenario.names)])
 scenario.mapping <- cbind.data.frame(scenario.id = scenario.ids,scenarnio.name = scenario.names)
-secnario.mapping <- scenario.names 
+secnario.mapping <- scenario.names
 names(scenario.names) = gsub("sc_","",scenario.ids)
 
-# Get the risk parameters
-risks <- scenarios %>% filter(type=="risk") %>% select(-c(2:5))
-names(risks) <- c("param",scenario.ids)
-risks2 <- risks %>% gather(scenario,value,-param) %>% unite(parameter,c("param","scenario")) %>% data.frame()
-risks3 <- as.numeric(risks2$value)
-risks.as.list <- setNames(split(risks3, seq(length(risks3))), risks2$parameter)
+tt <- "risk"
+PSA.N = 1000
+require(lhs)
+require(tidyverse)
+
+draw.latin.hypercube <- function(type,PSA.N=10) {
+  params.full <- scenarios %>% filter(type==tt) %>% select(-value,-description)
+  names.temp <- names(params.full)
+  for (y in scenario.names) names.temp <- gsub(y,paste0("sc_",names(scenario.names[which(scenario.names==y)])),names.temp)
+  names(params.full) <- gsub("psa_param","psa",names.temp)
+  params.full %>% melt(id.vars = c("param","psatype","type")) %>% mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%
+    mutate(variable = gsub("_psa1|_psa2","",variable) , paramtype = gsub("^_","",paramtype)) %>%
+    mutate(paramtype = ifelse(paramtype=="","value",paramtype)) %>%
+    mutate(paramtype = ifelse(psatype=="uniform",gsub("psa1","min",paramtype),paramtype)) %>%
+    mutate(paramtype = ifelse(psatype=="uniform",gsub("psa2","max",paramtype),paramtype)) %>%
+    mutate(paramtype = ifelse(psatype=="beta",gsub("psa1","shape1",paramtype),paramtype)) %>%
+    mutate(paramtype = ifelse(psatype=="beta",gsub("psa2","shape2",paramtype),paramtype)) %>%
+    rename(scenario = variable) %>% dcast(param+type+psatype+scenario~paramtype) %>%
+    unite(parameter,c("param","scenario")) -> params2
+  params.as.list <- setNames(split(params2, 1:nrow(params2)), params2$parameter) %>% purrr::map(~as.list(.x))
+  params <- unlist(lapply(params.as.list,function(x) x$value))
+
+
+
+  X <- randomLHS(PSA.N, length(params))
+  colnames(X) = names(params)
+
+  lhc.draws.transformed <- cbind.data.frame(lapply(params.as.list,function(x)
+  {
+    if (x[["psatype"]]=="beta")
+    {
+      qbeta(X[,x[["parameter"]]],shape1=x[["shape1"]],shape2=x[["shape2"]])
+    }
+    else if (x[["psatype"]]=="uniform")
+    {
+      qunif(X[,x[["parameter"]]],min=x[["min"]],max=x[["max"]])
+    }
+    else if (x[["psatype"]]=="constant")
+    {
+      rep(x[["value"]],PSA.N)
+    }
+  }
+  ))
+  lhc.draws.transformed
+}
+ii <- 1
+
+drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(type=.x) )
+names(drawn.parameter.values) <- unique(scenarios$type)
+
+risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]][ii,]), seq(nrow(t(drawn.parameter.values[["risk"]][ii,])))), colnames(drawn.parameter.values[["risk"]]))
 inputs.main <- append(list(
   vAge = 40,
   vGender = 1,
@@ -22,49 +66,25 @@ inputs.main <- append(list(
   vHorizon  = 10,
   vN = 100
 ),risks.as.list)
-
-
-# Get the disutilities 
-disutility <- scenarios %>% filter(type=="disutility") %>% select(-c(2:5))
-names(disutility) <- c("param",scenario.ids)
-disutility2 <- disutility %>% gather(scenario,value,-param) %>% unite(parameter,c("param","scenario")) %>% data.frame()
-disutility3 <- as.numeric(disutility2$value)
-disutility.as.list <- setNames(split(disutility3, seq(length(disutility3))), disutility2$parameter)
+disutility.as.list <- setNames(split(t(drawn.parameter.values[["disutility"]][ii,]), seq(nrow(t(drawn.parameter.values[["disutility"]][ii,])))), colnames(drawn.parameter.values[["disutility"]]))
 disutilities = append(list(
   secular_death = 1
 ),disutility.as.list)
 
-# Get the durations
-duration <- scenarios %>% filter(type=="duration") %>% select(-c(2:5))
-names(duration) <- c("param",scenario.ids)
-duration2 <- duration %>% gather(scenario,value,-param) %>% unite(parameter,c("param","scenario")) %>% data.frame()
-duration3 <- as.numeric(duration2$value)
-duration.as.list <- setNames(split(duration3, seq(length(duration3))), duration2$parameter)
+duration.as.list <- setNames(split(t(drawn.parameter.values[["duration"]][ii,]), seq(nrow(t(drawn.parameter.values[["duration"]][ii,])))), colnames(drawn.parameter.values[["duration"]]))
 durations = append(list(
 ),duration.as.list)
 
-type <- scenarios %>% filter(type=="type") %>% select(-c(2:5))
-names(type) <- c("param",scenario.ids)
-type2 <- type %>% gather(scenario,value,-param) %>% unite(parameter,c("param","scenario")) %>% data.frame()
-type3 <- as.numeric(type2$value)
-type.as.list <- setNames(split(type3, seq(length(type3))), type2$parameter)
+type.as.list <- setNames(split(t(drawn.parameter.values[["type"]][ii,]), seq(nrow(t(drawn.parameter.values[["type"]][ii,])))), colnames(drawn.parameter.values[["type"]]))
 type = append(list(
-  # A = 1,
-  # A_c = 0,
-  # B_Survive = 0,
-  # B_Death = 0,
   secular_death = 0
 ),type.as.list)
 
-cost <- scenarios %>% filter(type=="cost") %>% select(-c(2:5))
-names(cost) <- c("param",scenario.ids)
-cost2 <- cost %>% gather(scenario,value,-param) %>% unite(parameter,c("param","scenario")) %>% data.frame()
-cost3 <- as.numeric(cost2$value)
-cost.as.list <- setNames(split(cost3, seq(length(cost3))), cost2$parameter)
+
+cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]][ii,]), seq(nrow(t(drawn.parameter.values[["cost"]][ii,])))), colnames(drawn.parameter.values[["cost"]]))
 costs = append(list(
   panel_test=250
 ),cost.as.list)
 
 inputs <- append(inputs.main,list(disutilities=disutilities,durations=durations,type=type,costs=costs))
-
 
