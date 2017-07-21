@@ -1,21 +1,27 @@
 set.seed(23)
 
+# Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
 scenarios <- read.csv("./simple-pgx-scenario-parameters-psa.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
+run.psa <- FALSE
+if (!(run.psa)) scenarios$psatype = "constant"
 scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()
-scenario.ids <- paste0("sc_",letters[1:length(scenario.names)])
+
+# allow for up to 720 scenarios (just need enough scenario IDs)
+lots.of.letters <- c(LETTERS, sapply(LETTERS, function(x) paste0(x, LETTERS)))
+scenario.ids <- paste0("SC_",lots.of.letters[1:length(scenario.names)])
 scenario.mapping <- cbind.data.frame(scenario.id = scenario.ids,scenarnio.name = scenario.names)
 secnario.mapping <- scenario.names
-names(scenario.names) = gsub("sc_","",scenario.ids)
+names(scenario.names) = gsub("SC_","",scenario.ids)
 
 tt <- "risk"
 PSA.N = 1000
 require(lhs)
 require(tidyverse)
 
-draw.latin.hypercube <- function(type,PSA.N=10) {
+draw.latin.hypercube <- function(tt,PSA.N=10) {
   params.full <- scenarios %>% filter(type==tt) %>% select(-value,-description)
   names.temp <- names(params.full)
-  for (y in scenario.names) names.temp <- gsub(y,paste0("sc_",names(scenario.names[which(scenario.names==y)])),names.temp)
+  for (y in scenario.names) names.temp <- gsub(y,paste0("SC_",names(scenario.names[which(scenario.names==y)])),names.temp)
   names(params.full) <- gsub("psa_param","psa",names.temp)
   params.full %>% melt(id.vars = c("param","psatype","type")) %>% mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%
     mutate(variable = gsub("_psa1|_psa2","",variable) , paramtype = gsub("^_","",paramtype)) %>%
@@ -54,7 +60,7 @@ draw.latin.hypercube <- function(type,PSA.N=10) {
 }
 ii <- 1
 
-drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(type=.x) )
+drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(tt=.x) )
 names(drawn.parameter.values) <- unique(scenarios$type)
 
 risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]][ii,]), seq(nrow(t(drawn.parameter.values[["risk"]][ii,])))), colnames(drawn.parameter.values[["risk"]]))
