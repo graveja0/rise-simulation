@@ -114,26 +114,25 @@ Multi <- function(t, y, params)
     # # Event A stops at time t=5 years
     # if(t > 5) r_a <- 0
     r_d <- f_40yr_drate(t)
-    d_d <- r_d*(h_u1+h_t1+a_p1+a_a1+b_n1) 
-    d_d1 <- d_d +r_b2*p_bd2*a_p2 +r_b2*rr_b2*p_bd2*a_a2
-    d_d2 <- d_d +r_b1*p_bd1*a_p1 +r_b1*rr_b1*p_bd1*a_a1
+    d_d1 <- r_d + (r_b2*p_bd2*a_p2 +r_b2*rr_b2*p_bd2*a_a2)/(h_u1+h_t1+a_p1+a_a1+b_n1) 
+    d_d2 <- r_d + (r_b1*p_bd1*a_p1 +r_b1*rr_b1*p_bd1*a_a1)/(h_u2+h_t2+a_p2+a_a2+b_n2) 
     
     list(c(
       
-      h_u1  = -p_p*p_o*r_a2*h_u2 -r_a1*h_u1                                                                                    -d_d1,
-      h_t1  = +p_p*p_o*r_a2*h_u2                        -r_a1*h_t1                                                             -d_d1,
-      a_p1  =                    +r_a1*(1-p_o*p_g1)*h_u1+r_a1*(1-p_g1*p_r)*h_t1-r_b1*a_p1                                      -d_d1,
-      a_a1  =                    +r_a1*p_o*p_g1*h_u1    +r_a1*p_g1*p_r*h_t1                         -r_b1*rr_b1*a_a1           -d_d1,
-      b_n1  =                                                                  +r_b1*(1-p_bd1)*a_p1 +r_b1*rr_b1*(1-p_bd1)*a_a1 -d_d1,
+      h_u1  = -p_p*p_o*r_a2*h_u2 -r_a1*h_u1                                                                                    -d_d1*h_u1,
+      h_t1  = +p_p*p_o*r_a2*h_u2                        -r_a1*h_t1                                                             -d_d1*h_t1,
+      a_p1  =                    +r_a1*(1-p_o*p_g1)*h_u1+r_a1*(1-p_g1*p_r)*h_t1-r_b1*a_p1                                      -d_d1*a_p1,
+      a_a1  =                    +r_a1*p_o*p_g1*h_u1    +r_a1*p_g1*p_r*h_t1                         -r_b1*rr_b1*a_a1           -d_d1*a_a1,
+      b_n1  =                                                                  +r_b1*(1-p_bd1)*a_p1 +r_b1*rr_b1*(1-p_bd1)*a_a1 -d_d1*b_n1,
       b_d1  =                                                                  +r_b1*p_bd1*a_p1     +r_b1*rr_b1*p_bd1*a_a1,
       a_c1  =                    +r_a1*h_u1             +r_a1*h_t1,
       b_c1  =                                                                  +r_b1*a_p1           +r_b1*rr_b1*a_a1,
         
-      h_u2  = -p_p*p_o*r_a1*h_u1 -r_a2*h_u2                                                                                    -d_d2,
-      h_t2  = +p_p*p_o*r_a1*h_u1                        -r_a2*h_t2                                                             -d_d2,
-      a_p2  =                    +r_a2*(1-p_o*p_g2)*h_u2+r_a2*(1-p_g2*p_r)*h_t2-r_b2*a_p2                                      -d_d2,
-      a_a2  =                    +r_a2*p_o*p_g2*h_u2    +r_a2*p_g2*p_r*h_t2                         -r_b2*rr_b2*a_a2           -d_d2,
-      b_n2  =                                                                  +r_b2*(1-p_bd2)*a_p2 +r_b2*rr_b2*(1-p_bd2)*a_a2 -d_d2,
+      h_u2  = -p_p*p_o*r_a1*h_u1 -r_a2*h_u2                                                                                    -d_d2*h_u1,
+      h_t2  = +p_p*p_o*r_a1*h_u1                        -r_a2*h_t2                                                             -d_d2*h_t1,
+      a_p2  =                    +r_a2*(1-p_o*p_g2)*h_u2+r_a2*(1-p_g2*p_r)*h_t2-r_b2*a_p2                                      -d_d2*a_p1,
+      a_a2  =                    +r_a2*p_o*p_g2*h_u2    +r_a2*p_g2*p_r*h_t2                         -r_b2*rr_b2*a_a2           -d_d2*a_a1,
+      b_n2  =                                                                  +r_b2*(1-p_bd2)*a_p2 +r_b2*rr_b2*(1-p_bd2)*a_a2 -d_d2*b_n1,
       b_d2  =                                                                  +r_b2*p_bd2*a_p2     +r_b2*rr_b2*p_bd2*a_a2,
       a_c2  =                    +r_a2*h_u2             +r_a2*h_t2,
       b_c2  =                                                                  +r_b2*a_p2           +r_b2*rr_b2*a_a2,
