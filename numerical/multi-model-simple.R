@@ -20,8 +20,8 @@ params <- c(
   p_p   = 1,                  # Probability of panel test when test ordered
 
   # Risks
-  r_a1   = inst_rate(0.2, 10), # Rate of healthy having event A over 10 years
-  r_b1   = inst_rate(0.5, 3),  # Rate of post-A  having event B over 3 years
+  r_a1   = inst_rate(0.7, 10), # Rate of healthy having event A over 10 years
+  r_b1   = inst_rate(0.2, 3),  # Rate of post-A  having event B over 3 years
   rr_b1  = 0.5,                # Relative Risk for Event B with better treatment informed by genotyping
   r_a2   = inst_rate(0.2, 10), # Rate of healthy having event A over 10 years
   r_b2   = inst_rate(0.5, 3),  # Rate of post-A  having event B over 3 years
@@ -114,28 +114,33 @@ Multi <- function(t, y, params)
     # # Event A stops at time t=5 years
     # if(t > 5) r_a <- 0
     r_d <- f_40yr_drate(t)
-    d_d1 <- r_d + (r_b2*p_bd2*a_p2 +r_b2*rr_b2*p_bd2*a_a2)/(h_u1+h_t1+a_p1+a_a1+b_n1) 
-    d_d2 <- r_d + (r_b1*p_bd1*a_p1 +r_b1*rr_b1*p_bd1*a_a1)/(h_u2+h_t2+a_p2+a_a2+b_n2) 
+    
+    # Interaction is primarily through death (other is panel test)
+    liv  <- h_u1+h_t1+a_p1+a_a1+b_n1 # Living (should be same in all models i)
+    r_d1 <- r_d + (r_b2*p_bd2*a_p2 +r_b2*rr_b2*p_bd2*a_a2)/liv
+    r_d2 <- r_d + (r_b1*p_bd1*a_p1 +r_b1*rr_b1*p_bd1*a_a1)/liv
+    r_p1 <- p_p*p_o*r_a2*h_u2 / liv
+    r_p2 <- p_p*p_o*r_a1*h_u1 / liv
     
     list(c(
       
-      h_u1  = -p_p*p_o*r_a2*h_u2 -r_a1*h_u1                                                                                    -d_d1*h_u1,
-      h_t1  = +p_p*p_o*r_a2*h_u2                        -r_a1*h_t1                                                             -d_d1*h_t1,
-      a_p1  =                    +r_a1*(1-p_o*p_g1)*h_u1+r_a1*(1-p_g1*p_r)*h_t1-r_b1*a_p1                                      -d_d1*a_p1,
-      a_a1  =                    +r_a1*p_o*p_g1*h_u1    +r_a1*p_g1*p_r*h_t1                         -r_b1*rr_b1*a_a1           -d_d1*a_a1,
-      b_n1  =                                                                  +r_b1*(1-p_bd1)*a_p1 +r_b1*rr_b1*(1-p_bd1)*a_a1 -d_d1*b_n1,
-      b_d1  =                                                                  +r_b1*p_bd1*a_p1     +r_b1*rr_b1*p_bd1*a_a1,
-      a_c1  =                    +r_a1*h_u1             +r_a1*h_t1,
-      b_c1  =                                                                  +r_b1*a_p1           +r_b1*rr_b1*a_a1,
+      h_u1  = -r_p1*h_u1 -r_a1*h_u1                                                                                    -r_d1*h_u1,
+      h_t1  = +r_p1*h_u1 -r_a1*h_t1                                                                                    -r_d1*h_t1,
+      a_p1  =            +r_a1*(1-p_o*p_g1)*h_u1+r_a1*(1-p_g1*p_r)*h_t1-r_b1*a_p1                                      -r_d1*a_p1,
+      a_a1  =            +r_a1*p_o*p_g1*h_u1    +r_a1*p_g1*p_r*h_t1                         -r_b1*rr_b1*a_a1           -r_d1*a_a1,
+      b_n1  =                                                          +r_b1*(1-p_bd1)*a_p1 +r_b1*rr_b1*(1-p_bd1)*a_a1 -r_d1*b_n1,
+      b_d1  =                                                          +r_b1*p_bd1*a_p1     +r_b1*rr_b1*p_bd1*a_a1,
+      a_c1  =            +r_a1*h_u1             +r_a1*h_t1,
+      b_c1  =                                                          +r_b1*a_p1           +r_b1*rr_b1*a_a1,
         
-      h_u2  = -p_p*p_o*r_a1*h_u1 -r_a2*h_u2                                                                                    -d_d2*h_u1,
-      h_t2  = +p_p*p_o*r_a1*h_u1                        -r_a2*h_t2                                                             -d_d2*h_t1,
-      a_p2  =                    +r_a2*(1-p_o*p_g2)*h_u2+r_a2*(1-p_g2*p_r)*h_t2-r_b2*a_p2                                      -d_d2*a_p1,
-      a_a2  =                    +r_a2*p_o*p_g2*h_u2    +r_a2*p_g2*p_r*h_t2                         -r_b2*rr_b2*a_a2           -d_d2*a_a1,
-      b_n2  =                                                                  +r_b2*(1-p_bd2)*a_p2 +r_b2*rr_b2*(1-p_bd2)*a_a2 -d_d2*b_n1,
-      b_d2  =                                                                  +r_b2*p_bd2*a_p2     +r_b2*rr_b2*p_bd2*a_a2,
-      a_c2  =                    +r_a2*h_u2             +r_a2*h_t2,
-      b_c2  =                                                                  +r_b2*a_p2           +r_b2*rr_b2*a_a2,
+      h_u2  = -r_p2*h_u2 -r_a2*h_u2                                                                                    -r_d2*h_u1,
+      h_t2  = +r_p2*h_u2 -r_a2*h_t2                                                                                    -r_d2*h_t1,
+      a_p2  =            +r_a2*(1-p_o*p_g2)*h_u2+r_a2*(1-p_g2*p_r)*h_t2-r_b2*a_p2                                      -r_d2*a_p1,
+      a_a2  =            +r_a2*p_o*p_g2*h_u2    +r_a2*p_g2*p_r*h_t2                         -r_b2*rr_b2*a_a2           -r_d2*a_a1,
+      b_n2  =                                                          +r_b2*(1-p_bd2)*a_p2 +r_b2*rr_b2*(1-p_bd2)*a_a2 -r_d2*b_n1,
+      b_d2  =                                                          +r_b2*p_bd2*a_p2     +r_b2*rr_b2*p_bd2*a_a2,
+      a_c2  =            +r_a2*h_u2             +r_a2*h_t2,
+      b_c2  =                                                          +r_b2*a_p2           +r_b2*rr_b2*a_a2,
       
       disc  = -disc_rate*disc            # Simple discount rate
     ))
@@ -149,9 +154,16 @@ yinit[9]  <- 1
 yinit[17] <- 1
 
 times <- seq(0, 40, by=1/365)  # units of years, increments of days, everyone dies after 120, so simulation is cut short
-system.time(out <- ode(yinit, times, Multi, params)) 
+print(system.time(out <- ode(yinit, times, Multi, params)))
 
 plot(out)
+
+l1 <- out[,'h_u1'] + out[,'h_t1'] + out[,'a_p1'] + out[,'a_a1'] + out[,'b_n1']
+l2 <- out[,'h_u2'] + out[,'h_t2'] + out[,'a_p2'] + out[,'a_a2'] + out[,'b_n2']
+
+plot(l1-l2, typ='l', main="Abs Total Numerical Error")
+
+cat("Consistent population?", all(abs(l1-l2)<1e-8), '\n')
 
 stop("Working Halt")
 
