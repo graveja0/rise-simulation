@@ -6,10 +6,10 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
                                   rr <- 1
                                   
                                   # Baseline Risk
-                                  days <- 365*inputs$vDurationA_TK
+                                  days <- 365*s1(inputs$vDurationA_TK)
                                   
                                   # Convert To Probability 
-                                  rate <- (- (log ( 1 - inputs$vRiskA_TK)*rr) / days)
+                                  rate <- (- (log ( 1 - s1(inputs$vRiskA_TK))*rr) / days)
                                   
                                   t2e <- rexp(1, rate)
                                   
@@ -82,8 +82,9 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
 {
   traj %>% 
     #physician behavior
-    set_attribute(\"aControlOrder_TK\",function() sample(0:1,1,prob=c(1- inputs$vProbabilityOrder_TK,  inputs$vProbabilityOrder_TK))) %>%
-                   set_attribute(\"aControlRead_TK\",function() sample(0:1,1,prob=c(1- inputs$vProbabilityRead_TK,  inputs$vProbabilityRead_TK))) %>% 
+    set_attribute(\"aProbabilityOrder_TK\",function() s1Pr(inputs$vProbabilityOrder_TK)[1]) %>% 
+    set_attribute(\"aControlOrder_TK\",function() sample(0:1,1,prob=s1Pr(inputs$vProbabilityOrder_TK))) %>%
+                   set_attribute(\"aControlRead_TK\",function() sample(0:1,1,prob=s1Pr(inputs$vProbabilityRead_TK))) %>% 
                    A_TK_reactive_strategy(inputs) %>%
                    #assign drug
                    prescribe_drug_TK(inputs) %>%
@@ -99,13 +100,13 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
 "days_till_B_TK <- function(attrs,inputs) 
 {
   # Relative Risk
-  rr <- if(attrs[[\"aTreat_TK\"]]==1 & attrs[[\"aDrug_TK\"]]==2) inputs$vRR_B_TK else 1.0
+  rr <- if(attrs[[\"aTreat_TK\"]]==1 & attrs[[\"aDrug_TK\"]]==2) s1(inputs$vRR_B_TK) else 1.0
   
   # Baseline Risk
-  days <- 365*inputs$vDurationB_TK
+  days <- 365*s1(inputs$vDurationB_TK)
   
   # Convert To Probability 
-  rate <- (- (log ( 1 - inputs$vRiskB_TK)*rr) / days)
+  rate <- (- (log ( 1 - s1(inputs$vRiskB_TK))*rr) / days)
   
   t2e <- rexp(1, rate)
   
@@ -124,7 +125,7 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
     mark(\"B_TK\") %>%
           set_attribute(\"eventB_TK\", 1) %>%
           branch(
-          function(attrs) sample(1:2,1,prob=c(inputs$vFatalB_TK,1-inputs$vFatalB_TK)),
+          function(attrs) sample(1:2,1,prob=s1Pr(inputs$vFatalB_TK)),
           continue = c(FALSE, TRUE),
           trajectory(\"Die_TK\")  %>% mark(\"B_Death_TK\") %>% terminate_simulation(),
           trajectory(\"Survive_TK\")  %>%  mark(\"B_Survive_TK\") 

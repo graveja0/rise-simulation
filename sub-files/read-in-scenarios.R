@@ -1,9 +1,9 @@
 set.seed(23)
 
 # Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
-scenarios <- read.csv("./simple-pgx-scenario-parameters-psa.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
-run.psa <- FALSE
-if (!(run.psa)) scenarios$psatype = "constant"
+scenarios <- read.csv("./simple-pgx-scenario-parameters-psa-behavior.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
+#run.psa <- FALSE
+#if (!(run.psa)) scenarios$psatype = "constant"
 scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()
 
 # allow for up to 720 scenarios (just need enough scenario IDs)
@@ -14,7 +14,7 @@ secnario.mapping <- scenario.names
 names(scenario.names) = gsub("SC_","",scenario.ids)
 
 tt <- "risk"
-PSA.N = 1000
+
 require(lhs)
 require(tidyverse)
 
@@ -37,7 +37,7 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
 
 
 
-  X <- randomLHS(PSA.N, length(params))
+  X <- randomLHS(inputs.init$vN_PSA, length(params))
   colnames(X) = names(params)
 
   lhc.draws.transformed <- cbind.data.frame(lapply(params.as.list,function(x)
@@ -58,39 +58,39 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
   ))
   lhc.draws.transformed
 }
-ii <- 1
+#ii = 1
 
 drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(tt=.x) )
 names(drawn.parameter.values) <- unique(scenarios$type)
 
-risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]][ii,]), seq(nrow(t(drawn.parameter.values[["risk"]][ii,])))), colnames(drawn.parameter.values[["risk"]]))
-inputs.main <- append(list(
-  vAge = 40,
-  vGender = 1,
-  vPreemptive = "None", # "None" or "Panel"
-  vReactive = "None", # "None" or "Single" or "Panel"
-  vHorizon  = 10,
-  vN = 100
-),risks.as.list)
-disutility.as.list <- setNames(split(t(drawn.parameter.values[["disutility"]][ii,]), seq(nrow(t(drawn.parameter.values[["disutility"]][ii,])))), colnames(drawn.parameter.values[["disutility"]]))
-disutilities = append(list(
-  secular_death = 1
-),disutility.as.list)
-
-duration.as.list <- setNames(split(t(drawn.parameter.values[["duration"]][ii,]), seq(nrow(t(drawn.parameter.values[["duration"]][ii,])))), colnames(drawn.parameter.values[["duration"]]))
-durations = append(list(
-),duration.as.list)
-
-type.as.list <- setNames(split(t(drawn.parameter.values[["type"]][ii,]), seq(nrow(t(drawn.parameter.values[["type"]][ii,])))), colnames(drawn.parameter.values[["type"]]))
-type = append(list(
-  secular_death = 0
-),type.as.list)
-
-
-cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]][ii,]), seq(nrow(t(drawn.parameter.values[["cost"]][ii,])))), colnames(drawn.parameter.values[["cost"]]))
-costs = append(list(
-  panel_test=250
-),cost.as.list)
-
-inputs <- append(inputs.main,list(disutilities=disutilities,durations=durations,type=type,costs=costs))
+# risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]][ii,]), seq(nrow(t(drawn.parameter.values[["risk"]][ii,])))), colnames(drawn.parameter.values[["risk"]]))
+# inputs.main <- append(list(
+#   vAge = 40,
+#   vGender = 1,
+#   vPreemptive = "None", # "None" or "Panel"
+#   vReactive = "None", # "None" or "Single" or "Panel"
+#   vHorizon  = 10,
+#   vN = 100
+# ),risks.as.list)
+# disutility.as.list <- setNames(split(t(drawn.parameter.values[["disutility"]][ii,]), seq(nrow(t(drawn.parameter.values[["disutility"]][ii,])))), colnames(drawn.parameter.values[["disutility"]]))
+# disutilities = append(list(
+#   secular_death = 1
+# ),disutility.as.list)
+# 
+# duration.as.list <- setNames(split(t(drawn.parameter.values[["duration"]][ii,]), seq(nrow(t(drawn.parameter.values[["duration"]][ii,])))), colnames(drawn.parameter.values[["duration"]]))
+# durations = append(list(
+# ),duration.as.list)
+# 
+# type.as.list <- setNames(split(t(drawn.parameter.values[["type"]][ii,]), seq(nrow(t(drawn.parameter.values[["type"]][ii,])))), colnames(drawn.parameter.values[["type"]]))
+# type = append(list(
+#   secular_death = 0
+# ),type.as.list)
+# 
+# 
+# cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]][ii,]), seq(nrow(t(drawn.parameter.values[["cost"]][ii,])))), colnames(drawn.parameter.values[["cost"]]))
+# costs = append(list(
+#   panel_test=250
+# ),cost.as.list)
+# 
+# inputs <- append(inputs.main,list(disutilities=disutilities,durations=durations,type=type,costs=costs))
 

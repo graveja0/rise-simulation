@@ -1,4 +1,3 @@
-rm(list=ls())
 
 pkg = list("simmer",
            "ggplot2",
@@ -16,6 +15,8 @@ invisible(lapply(pkg, require, character.only = TRUE))
 
 ###initial inputs
 epsilon <- 0.000000000001
+s1 <- function(x) sample(x,1,replace=TRUE) # Sample from PSA inputs
+s1Pr <- function(x) c(1,-1) * sample(x,1,replace=TRUE) + c(0,1) # mu, 1-mu where mu is sampled from [0,1]
 
 # Read in the various scenarios and store in the inputs list object.
 source("./sub-files/read-in-scenarios.R")
@@ -29,11 +30,11 @@ paste("initialize_patient <- function(traj, inputs)
       { 
       traj %>% 
       seize(\"time_in_model\") %>%
-      set_attribute(\"aAgeInitial\", function() inputs$vAge) %>% 
+      set_attribute(\"aAgeInitial\", function() s1(inputs$vAge)) %>% 
       set_attribute(\"aAge\", function(attrs) attrs[['aAgeInitial']]) %>% 
-      set_attribute(\"aGender\", function() inputs$vGender) %>% 
+      set_attribute(\"aGender\", function() s1(inputs$vGender)) %>% 
       ") %>% cat()
-scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGene_",.x,"\", function() sample(1:2,1,prob=c(inputs$vGene_",.x,",1-inputs$vGene_",.x,")))"," %>% \n",sep="")) %>% unlist() %>% cat()
+scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGene_",.x,"\", function() sample(1:2,1,prob=s1Pr(inputs$vGene_",.x,")))"," %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGenotyped_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"eventA_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"eventB_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
@@ -177,6 +178,70 @@ source('./sub-files/event_main_loop_simple.R')
 exec.simulation <- function(inputs)
 {
   set.seed(12345)
+  
+  # risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]][ii,]), seq(nrow(t(drawn.parameter.values[["risk"]][ii,])))), colnames(drawn.parameter.values[["risk"]]))
+  # inputs.main <- append(list(
+  #   vAge = 40,
+  #   vGender = 1,
+  #   vPreemptive = "None", # "None" or "Panel"
+  #   vReactive = "None", # "None" or "Single" or "Panel"
+  #   vHorizon  = 10,
+  #   vN = 100
+  # ),risks.as.list)
+  # disutility.as.list <- setNames(split(t(drawn.parameter.values[["disutility"]][ii,]), seq(nrow(t(drawn.parameter.values[["disutility"]][ii,])))), colnames(drawn.parameter.values[["disutility"]]))
+  # disutilities = append(list(
+  #   secular_death = 1
+  # ),disutility.as.list)
+  # 
+  # duration.as.list <- setNames(split(t(drawn.parameter.values[["duration"]][ii,]), seq(nrow(t(drawn.parameter.values[["duration"]][ii,])))), colnames(drawn.parameter.values[["duration"]]))
+  # durations = append(list(
+  # ),duration.as.list)
+  # 
+  # type.as.list <- setNames(split(t(drawn.parameter.values[["type"]][ii,]), seq(nrow(t(drawn.parameter.values[["type"]][ii,])))), colnames(drawn.parameter.values[["type"]]))
+  # type = append(list(
+  #   secular_death = 0
+  # ),type.as.list)
+  # 
+  # 
+  # cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]][ii,]), seq(nrow(t(drawn.parameter.values[["cost"]][ii,])))), colnames(drawn.parameter.values[["cost"]]))
+  # costs = append(list(
+  #   panel_test=250
+  # ),cost.as.list)
+  # 
+  # inputs <- append(append(inputs.init,inputs.main),list(disutilities=disutilities,durations=durations,type=type,costs=costs))
+  # 
+  
+  risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]]), seq(nrow(t(drawn.parameter.values[["risk"]])))), colnames(drawn.parameter.values[["risk"]]))
+  inputs.main <- append(list(
+    vAge = 40,
+    vGender = 1,
+    vPreemptive = "None", # "None" or "Panel"
+    vReactive = "None", # "None" or "Single" or "Panel"
+    vHorizon  = 10,
+    vN = 100
+  ),risks.as.list)
+  disutility.as.list <- setNames(split(t(drawn.parameter.values[["disutility"]]), seq(nrow(t(drawn.parameter.values[["disutility"]])))), colnames(drawn.parameter.values[["disutility"]]))
+  disutilities = append(list(
+    secular_death = 1
+  ),disutility.as.list)
+  
+  duration.as.list <- setNames(split(t(drawn.parameter.values[["duration"]]), seq(nrow(t(drawn.parameter.values[["duration"]])))), colnames(drawn.parameter.values[["duration"]]))
+  durations = append(list(
+  ),duration.as.list)
+  
+  type.as.list <- setNames(split(t(drawn.parameter.values[["type"]]), seq(nrow(t(drawn.parameter.values[["type"]])))), colnames(drawn.parameter.values[["type"]]))
+  type = append(list(
+    secular_death = 0
+  ),type.as.list)
+  
+  
+  cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]]), seq(nrow(t(drawn.parameter.values[["cost"]])))), colnames(drawn.parameter.values[["cost"]]))
+  costs = append(list(
+    panel_test=250
+  ),cost.as.list)
+  
+  inputs <- append(append(inputs.init,inputs.main),list(disutilities=disutilities,durations=durations,type=type,costs=costs))
+  
   env  <<- simmer("Simple")
   traj <- simulation(env, inputs)
   env %>% create_counters(counters)
@@ -188,5 +253,7 @@ exec.simulation <- function(inputs)
   
   get_mon_arrivals(env, per_resource = T)
 }
+
+
 
 
