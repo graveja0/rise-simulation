@@ -1,3 +1,5 @@
-packrat/lib*/
 .Rproj.user
-run-data/
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
