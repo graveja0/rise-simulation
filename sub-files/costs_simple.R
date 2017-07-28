@@ -29,20 +29,24 @@ cost_cat <- data.frame(resource=c("panel_test","single_test_a",
                        cat=c(rep(1,2),rep(2,7),rep(3,35))
 )
 
-cost.qaly <- function(raw,inputs,ii=1) 
+cost.qaly <- function(raw,inputs,psa_id=1) 
 {
+  
+  durations.temp <- unlist(lapply(inputs$durations,function(x) x[psa_id]))
+  costs.temp <- unlist(lapply(inputs$costs,function(x) x[psa_id]))
+  disutilities.temp <- unlist(lapply(inputs$disutilities,function(x) x[psa_id]))
+  type.temp <- unlist(lapply(inputs$type,function(x) x[psa_id]))
+  
+  
   arrivals <- raw %>%  mutate(name = paste0(name,"_",replication))
   #arrivals <- results %>%  mutate(name = paste0(name,"_",replication))
   # Make all resources a factor (this allows for null events to still get summaries)
   arrivals$resource <- factor(arrivals$resource, counters)
   
   # Adjust all event end times from the inputs$durations
-  
-  # JAG : durations is currently a vector of N_PSA but should probably just be a scalar or sampled.
-  
   mapply(function(value, name){
     arrivals[arrivals$resource == name,]$end_time <<-arrivals[arrivals$resource == name,]$start_time + value
-  }, value=unlist(lapply(inputs$durations,function(x) x[ii])), name=names(unlist(lapply(inputs$durations,function(x) x[ii]))) )
+  }, value=durations.temp, name=names(durations.temp) )
   
   # Truncate to end of study or life
   end_times <- arrivals[arrivals$resource == 'time_in_model',]
@@ -59,15 +63,14 @@ cost.qaly <- function(raw,inputs,ii=1)
   # Compute Event base cost map
   idx <- function(str) {as.numeric(factor(str, levels=levels(arrivals$resource)))}
   base_cost_map <- rep(0, nlevels(arrivals$resource))
-  sapply(names(unlist(lapply(inputs$costs,function(x) x[ii]))), FUN=function(name){
-    base_cost_map[idx(name)] <<- unlist(lapply(inputs$costs,function(x) x[ii]))[[name]] 
+  sapply(names(inputs$costs), FUN=function(name){
+    base_cost_map[idx(name)] <<- costs.temp[[name]]    
   })
-  
   
   # Compute Disutility cost map
   base_disutility_map <- rep(0, nlevels(arrivals$resource))
-  sapply(names(unlist(lapply(inputs$disutilities,function(x) x[ii]))), FUN=function(name){
-    base_disutility_map[idx(name)] <<- unlist(lapply(inputs$disutilities,function(x) x[ii]))[[name]]    
+  sapply(names(inputs$disutilities), FUN=function(name){
+    base_disutility_map[idx(name)] <<- disutilities.temp[[name]]    
   })
   names(base_disutility_map) = levels(arrivals$resource)
   
@@ -78,7 +81,7 @@ cost.qaly <- function(raw,inputs,ii=1)
   
   arrivals$disutility = base_disutility_map[arrivals$resource]
   
-  type <- data.frame(resource=names(unlist(lapply(inputs$type,function(x) x[ii]))),type=unlist(lapply(inputs$type,function(x) x[ii])),row.names=NULL)
+  type <- data.frame(resource=names(type.temp),type=unlist(type.temp),row.names=NULL)
   qaly1 <- arrivals %>% group_by(name) %>% 
     arrange(start_time,desc(end_time)) %>% dplyr::mutate(utility = ifelse(row_number()==1,1,NA)) %>% filter(disutility>0 | utility>0) %>% #cross out events that have no impact on utility
     select(name,resource,start_time,end_time,activity_time,disutility) %>%
@@ -107,15 +110,22 @@ cost.qaly <- function(raw,inputs,ii=1)
 
 # This simply gets the dCOST and dQALY for each individual patient in the model. 
 
-cost.qaly.i <- function(raw,inputs)
+cost.qaly.i <- function(raw,inputs,psa_id=1)
 {
   arrivals <- raw %>%  mutate(name = paste0(name,"_",replication))
   arrivals$resource <- factor(arrivals$resource, counters)
   
   # Adjust all event end times from the inputs$durations
+  
+  # Get inputs for this PSA Run
+  durations.temp <- unlist(lapply(inputs$durations,function(x) x[psa_id]))
+  costs.temp <- unlist(lapply(inputs$costs,function(x) x[psa_id]))
+  disutilities.temp <- unlist(lapply(inputs$disutilities,function(x) x[psa_id]))
+  type.temp <- unlist(lapply(inputs$type,function(x) x[psa_id]))
+  
   mapply(function(value, name){
     arrivals[arrivals$resource == name,]$end_time <<-arrivals[arrivals$resource == name,]$start_time + value
-  }, value=inputs$durations, name=names(inputs$durations) )
+  }, value=durations.temp, name=names(durations.temp) )
   
   # Truncate to end of study or life
   end_times <- arrivals[arrivals$resource == 'time_in_model',]
@@ -133,13 +143,13 @@ cost.qaly.i <- function(raw,inputs)
   idx <- function(str) {as.numeric(factor(str, levels=levels(arrivals$resource)))}
   base_cost_map <- rep(0, nlevels(arrivals$resource))
   sapply(names(inputs$costs), FUN=function(name){
-    base_cost_map[idx(name)] <<- inputs$costs[[name]]    
+    base_cost_map[idx(name)] <<- costs.temp[[name]]    
   })
   
   # Compute Disutility cost map
   base_disutility_map <- rep(0, nlevels(arrivals$resource))
-  sapply(names(inputs$disutilities), FUN=function(name){
-    base_disutility_map[idx(name)] <<- inputs$disutilities[[name]]    
+  sapply(names(disutilities.temp), FUN=function(name){
+    base_disutility_map[idx(name)] <<- disutilities.temp[[name]]    
   })
   names(base_disutility_map) = levels(arrivals$resource)
   
@@ -150,7 +160,8 @@ cost.qaly.i <- function(raw,inputs)
   
   arrivals$disutility = base_disutility_map[arrivals$resource]
   
-  type <- data.frame(resource=names(inputs$type),type=unlist(inputs$type),row.names=NULL)
+  
+  type <- data.frame(resource=names(type.temp),type=unlist(type.temp),row.names=NULL)
   qaly1 <- arrivals %>% group_by(name) %>% 
     arrange(start_time,desc(end_time)) %>% dplyr::mutate(utility = ifelse(row_number()==1,1,NA)) %>% filter(disutility>0 | utility>0) %>% #cross out events that have no impact on utility
     select(name,resource,start_time,end_time,activity_time,disutility) %>%
@@ -189,19 +200,19 @@ cost.qaly.i <- function(raw,inputs)
 icer <- function(results) 
 {
   x <- results %>% arrange(dCOST) %>% mutate(ICER = (lag(dCOST)-dCOST)/(lag(dQALY)-dQALY)) 
-
+  
   #strong dominance (cross out strategies with a negative ICER)
   str.dom <- NULL
   if(any(x$ICER[-1]<0)==FALSE) {
     x$dominated[2:(nrow(x))] = 0
   } 
   while(any(x$ICER[-1]<0))
-    {
-      y <- x %>% filter(ICER<0)
-      x <- x %>% filter(ICER>0 | is.na(ICER)) %>% arrange(dCOST) %>% mutate(ICER = (dCOST-lag(dCOST))/(dQALY-lag(dQALY)))
-      x$dominated[2:(nrow(x))] = 0
-      str.dom <- rbind.fill(str.dom, y)
-    }
+  {
+    y <- x %>% filter(ICER<0)
+    x <- x %>% filter(ICER>0 | is.na(ICER)) %>% arrange(dCOST) %>% mutate(ICER = (dCOST-lag(dCOST))/(dQALY-lag(dQALY)))
+    x$dominated[2:(nrow(x))] = 0
+    str.dom <- rbind.fill(str.dom, y)
+  }
   if(is.null(str.dom)==FALSE) {str.dom <- str.dom %>% mutate(ICER=NA, dominated=1)}
   
   #extended dominance (cross out weakly dominated strategies until ICERs always increase with costs)
@@ -218,9 +229,7 @@ icer <- function(results)
     ext.dom <- rbind.fill(ext.dom, y)
   }
   if(is.null(ext.dom)==FALSE) {ext.dom <- ext.dom %>% mutate(ICER=NA, ext.dominated=1) }
-
+  
   out = plyr::rbind.fill(x, str.dom, ext.dom) %>% arrange(dCOST)
   out
 }
-
-

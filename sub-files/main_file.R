@@ -15,8 +15,6 @@ invisible(lapply(pkg, require, character.only = TRUE))
 
 ###initial inputs
 epsilon <- 0.000000000001
-s1 <- function(x) sample(x,1,replace=TRUE) # Sample from PSA inputs
-s1Pr <- function(x) c(1,-1) * sample(x,1,replace=TRUE) + c(0,1) # mu, 1-mu where mu is sampled from [0,1]
 
 # Read in the various scenarios and store in the inputs list object.
 source("./sub-files/read-in-scenarios.R")
@@ -30,11 +28,12 @@ paste("initialize_patient <- function(traj, inputs)
       { 
       traj %>% 
       seize(\"time_in_model\") %>%
-      set_attribute(\"aAgeInitial\", function() s1(inputs$vAge)) %>% 
+      set_attribute(\"aAgeInitial\", function() inputs$vAge) %>% 
       set_attribute(\"aAge\", function(attrs) attrs[['aAgeInitial']]) %>% 
-      set_attribute(\"aGender\", function() s1(inputs$vGender)) %>% 
+      set_attribute(\"aGender\", function() inputs$vGender) %>% 
+      set_attribute(\"aPSA_ID\",function() sample(seq(inputs$vN_PSA),1)) %>% 
       ") %>% cat()
-scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGene_",.x,"\", function() sample(1:2,1,prob=s1Pr(inputs$vGene_",.x,")))"," %>% \n",sep="")) %>% unlist() %>% cat()
+scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGene_",.x,"\", function(attrs) sample(1:2,1,prob=c(inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]],1-inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]])))"," %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGenotyped_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"eventA_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"eventB_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()

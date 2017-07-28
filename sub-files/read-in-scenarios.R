@@ -60,7 +60,7 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
 }
 #ii = 1
 
-drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(tt=.x) )
+drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(tt=.x,PSA.N=inputs.init$vN_PSA) )
 names(drawn.parameter.values) <- unique(scenarios$type)
 
 # risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]][ii,]), seq(nrow(t(drawn.parameter.values[["risk"]][ii,])))), colnames(drawn.parameter.values[["risk"]]))

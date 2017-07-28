@@ -21,5 +21,5 @@ A_c,type,0,constant,???,0,0,0,0,0,0,0,0,0,0,0,0
 B_Survive,type,0,constant,???,0,0,0,0,0,0,0,0,0,0,0,0
 B_Death,type,0,constant,???,0,0,0,0,0,0,0,0,0,0,0,0
 seculardeath,type,0,constant,???,0,0,0,0,0,0,0,0,0,0,0,0
-vProbabilityOrder,risk,0.5,uniform,probability of ordering,0.5,0,1,0.5,0,1,0.5,0,1,0.5,0,1
-vProbabilityRead,risk,0.5,uniform,probability of reading,0.5,0,1,0.5,0,1,0.5,0,1,0.5,0,1
+vProbabilityOrder,risk,0.5,uniform,probability of ordering,1,1,1,1,1,1,1,1,1,1,1,1
+vProbabilityRead,risk,0.5,uniform,probability of reading,1,1,1,1,1,1,1,1,1,1,1,1
