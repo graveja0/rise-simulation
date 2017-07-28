@@ -110,7 +110,7 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
   
   t2e <- rexp(1, rate)
   
-  if(t2e > days || attrs[[\"eventA_TK\"]] != 1 || attrs[[\"eventB_TK\"]] != 0)
+  if(attrs[[\"eventA_TK\"]] != 1 || attrs[[\"eventB_TK\"]] != 0)
   t2e <- 365*inputs$vHorizon + 1
   
   return(t2e)
