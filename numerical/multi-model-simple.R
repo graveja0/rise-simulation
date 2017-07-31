@@ -1,5 +1,4 @@
 library(deSolve)
-library(flexsurv) # For pgompertz
 
 ss_death <- read.csv("ss-death-2011.csv")
 
@@ -32,24 +31,24 @@ params <- c(
   c_bs1  = 25000,              # Cost for event B survival
   c_bd1  = 15000,              # Cost for event B death
   c_tx1  = 100/30,             # Daily cost of standard treatment
-  c_alt1 = 300/30,             # Daily cots of alternate treatment
+  c_alt1 = 300/30,             # Daily cost of alternate treatment
 
   
   c_a2   = 10000,              # Cost of event A
   c_bs2  = 25000,              # Cost for event B survival
   c_bd2  = 15000,              # Cost for event B death
   c_tx2  = 100/30,             # Daily cost of standard treatment
-  c_alt2 = 700/30,             # Daily cots of alternate treatment
+  c_alt2 = 700/30,             # Daily cost of alternate treatment
 
   c_t    = 100,                # Cost of test
   
   # Disutility
   d_a1   = 0.2,                # Disutility for event A
-  d_at1  = 3*365,              # Time in days for disutility of event A
+  d_at1  = 3,                  # Time in years for disutility of event A
   d_b1   = 0.15,               # Permanent Disutility for event B
   
   d_a2   = 0.2,                # Disutility for event A
-  d_at2  = 3*365,              # Time in days for disutility of event A
+  d_at2  = 3,                  # Time in yearss for disutility of event A
   d_b2   = 0.15,               # Permanent Disutility for event B
   
 
@@ -62,12 +61,12 @@ f_40yr_percent_d    <- c(ss_death$f_death_prob[41:120])
 sim_adj_age         <- 0:79 + 0.5 # 0.5 offset since percentage is for whole year
 f_40yr_per_d_spline <- splinefun(sim_adj_age, f_40yr_percent_d)
 plot(1:2); dev.off()
-curve(f_40yr_per_d_spline, col='red', from=0, to=82, xlab="years past 40", ylab="percent chance of death")
-points(sim_adj_age, f_40yr_percent_d)
+#curve(f_40yr_per_d_spline, col='red', from=0, to=82, xlab="years past 40", ylab="percent chance of death")
+#points(sim_adj_age, f_40yr_percent_d)
 
 # Clamped at infinite rate via pmin
 f_40yr_drate <- function(t) inst_rate(pmin(f_40yr_per_d_spline(t), 1),1)
-curve(f_40yr_drate, from=0, to=90)
+#curve(f_40yr_drate, from=0, to=90)
 
 
 # This is for doing numberical integration of a set of numbers at an even interval
@@ -97,7 +96,7 @@ Multi <- function(t, y, params)
     r_d <- f_40yr_drate(t)
     
     # Interaction is primarily through death (other is panel test)
-    liv  <- h_u1+h_t1+a_p1+a_a1+b_n1 # Living (should be same in all models i)
+    liv  <- h_u1+h_t1+a_p1+a_a1+b_p1+b_a1 # Living (should be same in all models i)
     r_d1 <- r_d + (r_b2*p_bd2*a_p2 +r_b2*rr_b2*p_bd2*a_a2)/liv
     r_d2 <- r_d + (r_b1*p_bd1*a_p1 +r_b1*rr_b1*p_bd1*a_a1)/liv
     r_p1 <- p_p*p_o*r_a2*h_u2 / liv
@@ -109,42 +108,51 @@ Multi <- function(t, y, params)
       h_t1  = +r_p1*h_u1 -r_a1*h_t1                                                                                    -r_d1*h_t1,
       a_p1  =            +r_a1*(1-p_o*p_g1)*h_u1+r_a1*(1-p_g1*p_r)*h_t1-r_b1*a_p1                                      -r_d1*a_p1,
       a_a1  =            +r_a1*p_o*p_g1*h_u1    +r_a1*p_g1*p_r*h_t1                         -r_b1*rr_b1*a_a1           -r_d1*a_a1,
-      b_n1  =                                                          +r_b1*(1-p_bd1)*a_p1 +r_b1*rr_b1*(1-p_bd1)*a_a1 -r_d1*b_n1,
-      b_d1  =                                                          +r_b1*p_bd1*a_p1     +r_b1*rr_b1*p_bd1*a_a1,
       a_c1  =            +r_a1*h_u1             +r_a1*h_t1,
+      a_l1  =                                                                                                          r_d1*a_q1,
+      a_e1  =                                                                                                          r_d1*a_q1 - if(t < d_at1) 0 else lagderiv(t-d_at1, 6),
+      a_q1  =            +r_a1*h_u1             +r_a1*h_t1 - if(t < d_at1) 0 else lagderiv(t-d_at1, 5)*exp(-a_e1),
+      b_p1  =                                                          +r_b1*(1-p_bd1)*a_p1                            -r_d1*b_p1,
+      b_a1  =                                                          +r_b1*rr_b1*(1-p_bd1)*a_a1                      -r_d1*b_a1,
+      b_d1  =                                                          +r_b1*p_bd1*a_p1  +r_b1*rr_b1*p_bd1*a_a1,
       b_c1  =                                                          +r_b1*(1-p_bd1)*a_p1 +r_b1*rr_b1*(1-p_bd1)*a_a1,
-        
-      h_u2  = -r_p2*h_u2 -r_a2*h_u2                                                                                    -r_d2*h_u1,
-      h_t2  = +r_p2*h_u2 -r_a2*h_t2                                                                                    -r_d2*h_t1,
-      a_p2  =            +r_a2*(1-p_o*p_g2)*h_u2+r_a2*(1-p_g2*p_r)*h_t2-r_b2*a_p2                                      -r_d2*a_p1,
-      a_a2  =            +r_a2*p_o*p_g2*h_u2    +r_a2*p_g2*p_r*h_t2                         -r_b2*rr_b2*a_a2           -r_d2*a_a1,
-      b_n2  =                                                          +r_b2*(1-p_bd2)*a_p2 +r_b2*rr_b2*(1-p_bd2)*a_a2 -r_d2*b_n1,
-      b_d2  =                                                          +r_b2*p_bd2*a_p2     +r_b2*rr_b2*p_bd2*a_a2,
+
+      h_u2  = -r_p2*h_u2 -r_a2*h_u2                                                                                    -r_d2*h_u2,
+      h_t2  = +r_p2*h_u2 -r_a2*h_t2                                                                                    -r_d2*h_t2,
+      a_p2  =            +r_a2*(1-p_o*p_g2)*h_u2+r_a2*(1-p_g2*p_r)*h_t2-r_b2*a_p2                                      -r_d2*a_p2,
+      a_a2  =            +r_a2*p_o*p_g2*h_u2    +r_a2*p_g2*p_r*h_t2                         -r_b2*rr_b2*a_a2           -r_d2*a_a2,
       a_c2  =            +r_a2*h_u2             +r_a2*h_t2,
-      b_c2  =                                                          +r_b2*a_p2           +r_b2*rr_b2*a_a2,
+      a_l2  =                                                                                                          r_d2*a_q2,
+      a_e2  =                                                                                                          r_d2*a_q2 - if(t < d_at2) 0 else lagderiv(t-d_at2, 6 + 12),
+      a_q2  =            +r_a2*h_u2             +r_a2*h_t2 - if(t < d_at2) 0 else lagderiv(t-d_at2, 5+12)*exp(-a_e2),
+      b_p1  =                                                          +r_b2*(1-p_bd2)*a_p2                            -r_d2*b_p2,
+      b_a1  =                                                          +r_b2*rr_b2*(1-p_bd2)*a_a2                      -r_d2*b_a2,
+      b_d1  =                                                          +r_b2*p_bd2*a_p2  +r_b2*rr_b2*p_bd2*a_a2,
+      b_c1  =                                                          +r_b2*(1-p_bd2)*a_p2 +r_b2*rr_b2*(1-p_bd2)*a_a2,
       
-      test  = +p_o*(r_a1*h_u1 + r_a2*h_u2),
+      test  = +p_o*(r_a1*h_u1 + r_a2*h_u2), # How many tests performed
       disc  = -disc_rate*disc            # Simple discount rate
     ))
   })
 }
 
-yinit <- rep(0, 18)
-names(yinit) <- c("h_u1", "h_t1", "a_p1", "a_a1", "b_n1", "b_d1", "a_c1", "b_c1",
-                  "h_u2", "h_t2", "a_p2", "a_a2", "b_n2", "b_d2", "a_c2", "b_c2",
-                  "test", "disc")
-yinit[1]  <- 1
-yinit[9]  <- 1
-yinit["disc"] <- 1
+yinit <- rep(0, 26)
+names(yinit) <- c(
+  "h_u1", "h_t1", "a_p1", "a_a1", "a_c1", "a_l1", "a_e1", "a_q1", "b_p1", "b_a1", "b_d1", "b_c1",
+  "h_u2", "h_t2", "a_p2", "a_a2", "a_c2", "a_l2", "a_e2", "a_q2", "b_p2", "b_a2", "b_d2", "b_c2",
+  "test", "disc")
+yinit["h_u1"]  <- 1
+yinit["h_u2"]  <- 1
+yinit["disc"]  <- 1
 
 times <- seq(0, 40, by=1/365)  # units of years, increments of days, everyone dies after 120, so simulation is cut short
-print(system.time(out <- ode(yinit, times, Multi, params)))
+print(system.time(out <- dede(yinit, times, Multi, params)))
 
 plot(out)
 
 # Check that living population totals are in agreement within numerical error
-l1 <- out[,'h_u1'] + out[,'h_t1'] + out[,'a_p1'] + out[,'a_a1'] + out[,'b_n1']
-l2 <- out[,'h_u2'] + out[,'h_t2'] + out[,'a_p2'] + out[,'a_a2'] + out[,'b_n2']
+l1 <- out[,'h_u1'] + out[,'h_t1'] + out[,'a_p1'] + out[,'a_a1'] + out[,'b_p1'] + out[,'b_a1']
+l2 <- out[,'h_u2'] + out[,'h_t2'] + out[,'a_p2'] + out[,'a_a2'] + out[,'b_p2'] + out[,'b_a2']
 #plot(l1-l2, typ='l', main="Abs Total Numerical Error")
 cat("Consistent population?", all(abs(l1-l2)<1e-8), '\n')
 
@@ -163,29 +171,40 @@ costs <- function(solution, params)
             c_bd1 *sum(diff(solution[,'b_d1'])*solution[2:n,'disc']) +
             c_tx1 *365*sum(simpson*solution[,'a_p1']*solution[,'disc'])*step +
             c_alt1*365*sum(simpson*solution[,'a_a1']*solution[,'disc'])*step +
+            c_tx1 *365*sum(simpson*solution[,'b_p1']*solution[,'disc'])*step +
+            c_alt1*365*sum(simpson*solution[,'b_a1']*solution[,'disc'])*step +
+      
             c_a2  *sum(diff(solution[,'a_c2'])*solution[2:n,'disc']) +
             c_bs2 *sum(diff(solution[,'b_c2'])*solution[2:n,'disc']) +
             c_bd2 *sum(diff(solution[,'b_d2'])*solution[2:n,'disc']) +
             c_tx2 *365*sum(simpson*solution[,'a_p2']*solution[,'disc'])*step +
-            c_alt2*365*sum(simpson*solution[,'a_a1']*solution[,'disc'])*step +
+            c_alt2*365*sum(simpson*solution[,'a_a2']*solution[,'disc'])*step +
+            c_tx2 *365*sum(simpson*solution[,'b_p2']*solution[,'disc'])*step +
+            c_alt2*365*sum(simpson*solution[,'b_a2']*solution[,'disc'])*step +
+      
             c_t   *sum(diff(solution[,'test'])*solution[2:n,'disc'])
 
-    # Total possible life units is integral of discounted time
-    life <- sum(simpson*solution[,'disc'])*step
     
-    disA <- NA # Need to figure out
-    
-    # Permanent disutility for B (integration)
-    disB <- d_b1*sum(simpson*solution[,'b_n1']*solution[,'disc'])*step + 
-            d_b2*sum(simpson*solution[,'b_n2']*solution[,'disc'])*step
-      
     # Total living in model
     life <- solution[,'h_u1'] +
             solution[,'h_t1'] +
             solution[,'a_p1'] +
             solution[,'a_a1'] +
-            solution[,'b_n1']
+            solution[,'b_p1'] + 
+            solution[,'b_a1'] 
+
+    # Total possible life units is integral of discounted time
     pQALY <- sum(simpson*life*solution[,'disc'])*step
+
+    # Temp disutility of A
+    disA <- d_a1*sum(simpson*solution[,'a_q1']*solution[,'disc'])*step + 
+            d_a2*sum(simpson*solution[,'a_q2']*solution[,'disc'])
+      
+    # Permanent disutility for B (integration)
+    disB <- d_b1*sum(simpson*solution[,'b_p1']*solution[,'disc'])*step + 
+            d_b1*sum(simpson*solution[,'b_a1']*solution[,'disc'])*step +
+            d_b2*sum(simpson*solution[,'b_p2']*solution[,'disc'])*step +
+            d_b2*sum(simpson*solution[,'b_a2']*solution[,'disc'])*step 
 
     c(cost       = unname(cost),
       qaly       = unname(pQALY-disA-disB),
@@ -193,16 +212,16 @@ costs <- function(solution, params)
       disutil_a  = unname(disA),
       disutil_b  = unname(disB),
       a1_count   = unname(solution[n,'a_c1']),
-      b1_count   = unname(solution[n,'b_n1']+solution[n,'b_d1']),
+      b1_count   = unname(solution[n,'b_c1']+solution[n,'b_d1']),
       living     = unname(life[n])
       )
   })
 }
 
-expected <- function(params) costs(ode(yinit, times, Multi, params), params)
+expected <- function(params) costs(dede(yinit, times, Multi, params), params)
 
-round(expected(params), 4)
-stop("Working Halt")
+cat(round(expected(params), 4))
+
 # params['r_a'] <- params['r_a']*0.5
 # params['c_t']  <- 2000
 # round(expected(params), 4)
