@@ -198,7 +198,7 @@ costs <- function(solution, params)
 
     # Temp disutility of A
     disA <- d_a1*sum(simpson*solution[,'a_q1']*solution[,'disc'])*step + 
-            d_a2*sum(simpson*solution[,'a_q2']*solution[,'disc'])
+            d_a2*sum(simpson*solution[,'a_q2']*solution[,'disc'])*step
       
     # Permanent disutility for B (integration)
     disB <- d_b1*sum(simpson*solution[,'b_p1']*solution[,'disc'])*step + 
@@ -220,7 +220,8 @@ costs <- function(solution, params)
 
 expected <- function(params) costs(dede(yinit, times, Multi, params), params)
 
-cat(round(expected(params), 4))
+sol <- round(expected(params), 4)
+print(sol)
 
 # params['r_a'] <- params['r_a']*0.5
 # params['c_t']  <- 2000
