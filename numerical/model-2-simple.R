@@ -80,7 +80,7 @@ alt_simp_coef <- function(i)
 
 ###################################
 # Numerical Delay Differential Equation
-Multi <- function(t, y, params)
+Double <- function(t, y, params)
 {
   with(as.list(c(y, params)), {
     
@@ -146,7 +146,7 @@ yinit["h_u2"]  <- 1
 yinit["disc"]  <- 1
 
 times <- seq(0, 40, by=1/365)  # units of years, increments of days, everyone dies after 120, so simulation is cut short
-print(system.time(out <- dede(yinit, times, Multi, params)))
+print(system.time(out <- dede(yinit, times, Double, params)))
 
 plot(out)
 
@@ -218,7 +218,7 @@ costs <- function(solution, params)
   })
 }
 
-expected <- function(params) costs(dede(yinit, times, Multi, params), params)
+expected <- function(params) costs(dede(yinit, times, Double, params), params)
 
 sol <- round(expected(params), 4)
 print(sol)
