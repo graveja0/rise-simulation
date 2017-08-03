@@ -40,6 +40,7 @@ key <- list(
 )
 
 map <- function(name, n) key[[name]] + (n-1) * length(key)
+maps <- function(name, n) key[[name]] + (n-1) * length(key) + 1  # Solution is offset by time dimension
 
 ###################################
 # Numerical Delay Differential Equation
@@ -107,75 +108,64 @@ print(system.time(out <- dede(yinit, times, genModel, params)))
 
 plot(out)
 
-# Check that living population totals are in agreement within numerical error
-l1 <- out[,'h_u1'] + out[,'h_t1'] + out[,'a_p1'] + out[,'a_a1'] + out[,'b_p1'] + out[,'b_a1']
-l2 <- out[,'h_u2'] + out[,'h_t2'] + out[,'a_p2'] + out[,'a_a2'] + out[,'b_p2'] + out[,'b_a2']
-#plot(l1-l2, typ='l', main="Abs Total Numerical Error")
-cat("Consistent population?", all(abs(l1-l2)<1e-8), '\n')
-
-
-
 costs <- function(solution, params)
 {
-  n <- length(solution[,1])
-  simpson <- alt_simp_coef(n)
+  k        <- length(solution[,1])
+  simpson  <- alt_simp_coef(k)
   step     <- solution[2,'time'] - solution[1,'time']
   
   with(as.list(params), {
-    # Compute Discounted Cost
-    cost <- c_a1  *sum(diff(solution[,'a_c1'])*solution[2:n,'disc']) +
-            c_bs1 *sum(diff(solution[,'b_c1'])*solution[2:n,'disc']) +
-            c_bd1 *sum(diff(solution[,'b_d1'])*solution[2:n,'disc']) +
-            c_tx1 *365*sum(simpson*solution[,'a_p1']*solution[,'disc'])*step +
-            c_alt1*365*sum(simpson*solution[,'a_a1']*solution[,'disc'])*step +
-            c_tx1 *365*sum(simpson*solution[,'b_p1']*solution[,'disc'])*step +
-            c_alt1*365*sum(simpson*solution[,'b_a1']*solution[,'disc'])*step +
-      
-            c_a2  *sum(diff(solution[,'a_c2'])*solution[2:n,'disc']) +
-            c_bs2 *sum(diff(solution[,'b_c2'])*solution[2:n,'disc']) +
-            c_bd2 *sum(diff(solution[,'b_d2'])*solution[2:n,'disc']) +
-            c_tx2 *365*sum(simpson*solution[,'a_p2']*solution[,'disc'])*step +
-            c_alt2*365*sum(simpson*solution[,'a_a2']*solution[,'disc'])*step +
-            c_tx2 *365*sum(simpson*solution[,'b_p2']*solution[,'disc'])*step +
-            c_alt2*365*sum(simpson*solution[,'b_a2']*solution[,'disc'])*step +
-      
-            c_t   *sum(diff(solution[,'test'])*solution[2:n,'disc'])
+    disc  <- length(key) * n + 3
 
+    cost <- c_t*sum(diff(solution[,disc-1])*solution[2:k,disc]) # Testing costs
+    for(i in 1:n)
+    {
+      # Compute Discounted Cost
+      cost <- cost + 
+              c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
+              c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
+              c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc]) +
+              c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
+              c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
+              c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
+              c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
+    }
     
     # Total living in model
-    life <- solution[,'h_u1'] +
-            solution[,'h_t1'] +
-            solution[,'a_p1'] +
-            solution[,'a_a1'] +
-            solution[,'b_p1'] + 
-            solution[,'b_a1'] 
+    life <- solution[,maps('h_u',i)] +
+            solution[,maps('h_t',i)] +
+            solution[,maps('a_p',i)] +
+            solution[,maps('a_a',i)] +
+            solution[,maps('b_p',i)] + 
+            solution[,maps('b_a',i)] 
 
     # Total possible life units is integral of discounted time
-    pQALY <- sum(simpson*life*solution[,'disc'])*step
+    pQALY <- sum(simpson*life*solution[,disc])*step
 
     # Temp disutility of A
-    disA <- d_a1*sum(simpson*solution[,'a_q1']*solution[,'disc'])*step + 
-            d_a2*sum(simpson*solution[,'a_q2']*solution[,'disc'])*step
+    disA <- 0
+    disB <- 0
+    for(i in 1:n)
+    {
+      disA <- disA + d_a[i]*sum(simpson*solution[,maps('a_q',i)]*solution[,disc])*step
       
-    # Permanent disutility for B (integration)
-    disB <- d_b1*sum(simpson*solution[,'b_p1']*solution[,'disc'])*step + 
-            d_b1*sum(simpson*solution[,'b_a1']*solution[,'disc'])*step +
-            d_b2*sum(simpson*solution[,'b_p2']*solution[,'disc'])*step +
-            d_b2*sum(simpson*solution[,'b_a2']*solution[,'disc'])*step 
+      # Permanent disutility for B (integration)
+      disB <- disB + 
+              d_b[i]*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step + 
+              d_b[i]*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step 
+    }
 
     c(cost       = unname(cost),
       qaly       = unname(pQALY-disA-disB),
       possible   = unname(pQALY),
       disutil_a  = unname(disA),
       disutil_b  = unname(disB),
-      a1_count   = unname(solution[n,'a_c1']),
-      b1_count   = unname(solution[n,'b_c1']+solution[n,'b_d1']),
-      living     = unname(life[n])
+      living     = unname(life[k])
       )
   })
 }
 
-expected <- function(params) costs(dede(yinit, times, Multi, params), params)
+expected <- function(params) costs(dede(yinit, times, genModel, params), params)
 
 sol <- round(expected(params), 4)
 print(sol)
