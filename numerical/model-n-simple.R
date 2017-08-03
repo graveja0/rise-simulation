@@ -43,13 +43,9 @@ map <- function(name, n) key[[name]] + (n-1) * length(key)
 
 ###################################
 # Numerical Delay Differential Equation
-genModel <- function(params)
+genModel <- function(t, y, params)
 {
-  function(t, y, ignore)
-  {
-    with(as.list(c(y, params)), {
-    
-      r_d <- f_40yr_drate(t)
+  with(as.list(c(y, params)), {
     
     # Interaction is primarily through death (other is panel test)
     # Living (should be same in all models i)
@@ -63,14 +59,19 @@ genModel <- function(params)
     rate <- c()
     for(i in 1:n)
     {
-      
-      #### FIXME!!!! 
-      r_d <- r_d + (r_b2*p_bd2*(a_p2+rr_b2*a_a2))/liv
-      r_p <- p_p*p_o* r_a2*h_u2 / liv
-      ####
-      
+      r_d <- f_40yr_drate(t)
+      r_p <- 0
+      for(j in 1:n)
+      {
+        if(j != i)
+        {
+          r_d <- r_d + (r_b[j]*p_bd[j]*(y[map("a_p", j)]+rr_b[j]*y[map("a_a", j)]))/liv
+          r_p <- r_p + p_p*p_o*r_a[j]*y[map("h_u", j)] / liv
+        }
+      }
+
       rate <- c(rate, 
-        (-r_p-r_a[i]-r_d1[i])*y[map("h_u", i)],
+        (-r_p-r_a[i]-r_d)*y[map("h_u", i)],
         r_p*y[map("h_u", i)] + (-r_a[i]-r_d)*y[map("h_t", i)],
         r_a[i]*(1-p_o*p_g[i])*y[map("h_u", i)]+r_a[i]*(1-p_g[i]*p_r)*y[map("h_t", i)]-r_b[i]*y[map("a_p", i)] -r_d*y[map("a_p", i)],
         r_a[i]*p_o*p_g[i]*y[map("h_u", i)]+r_a[i]*p_g[i]*p_r*y[map("h_t", i)] -r_b[i]*rr_b[i]*y[map("a_a", i)] -r_d*y[map("a_a", i)],
@@ -84,7 +85,7 @@ genModel <- function(params)
         r_b[i]*(1-p_bd[i])*y[map("a_p", i)] +r_b[i]*rr_b[i]*(1-p_bd[i])*y[map("a_a", i)]
       )
     }
-    
+
     tests <- p_o*sum(sapply(1:n, function(i) {
       r_a[i]*y[map("h_u", i)]
     }))
@@ -92,18 +93,17 @@ genModel <- function(params)
     list(c(rate,
            tests,
            -disc_rate*y[n * length(key) + 2]
-           ))
-    })
-  }
+    ))
+  })
 }
 
 yinit <- rep(0, length(key)*params[["n"]]+1)
 yinit <- c(yinit, 1)
-for(i in 1:params[["n"]]) yinit[map("h_u1", i)] <- 1
+for(i in 1:params[["n"]]) yinit[map("h_u", i)] <- 1
 
 
 times <- seq(0, 40, by=1/365)  # units of years, increments of days, everyone dies after 120, so simulation is cut short
-print(system.time(out <- dede(yinit, times, genModel(params), NULL)))
+print(system.time(out <- dede(yinit, times, genModel, params)))
 
 plot(out)
 

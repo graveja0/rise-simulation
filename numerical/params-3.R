@@ -4,7 +4,7 @@ inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
 
 ###################################
 # Main model parameters
-params <- c(
+params <- list(
   n     = 3,
   # Probabilities
   p_o   = 0.75,               # Probability of ordering test
