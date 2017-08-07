@@ -83,8 +83,8 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
   traj %>% 
     #physician behavior
     #set_attribute(\"aProbabilityOrder_TK\",function() c(inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]])) %>% 
-    set_attribute(\"aControlOrder_TK\",function(attrs) sample(0:1,1,prob=c(inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]]))) %>%
-                   set_attribute(\"aControlRead_TK\",function(attrs) sample(0:1,1,prob=c(inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]],1-inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]]))) %>% 
+    set_attribute(\"aControlOrder_TK\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]]))) %>%
+                   set_attribute(\"aControlRead_TK\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]]))) %>% 
                    A_TK_reactive_strategy(inputs) %>%
                    #assign drug
                    prescribe_drug_TK(inputs) %>%
