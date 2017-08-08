@@ -3,9 +3,9 @@ rm(list=ls())
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 100,
+  vN = 10000,
   vAge= 40,
-  vN_PSA = 10
+  vN_PSA = 15
 )
 
 source("./sub-files/main_file.R")
@@ -20,7 +20,8 @@ reactive = "None"
 
 for(preemptive in c("None","Panel"))
 {
-  for(reactive in c("None","Single","Panel"))
+  #for(reactive in c("None","Single","Panel"))
+  for(reactive in c("None","Panel"))
   {
     if(preemptive == "PREDICT" && reactive == "Panel") {next}
     if(preemptive == "PREDICT" && reactive == "Single") {next}
@@ -45,20 +46,22 @@ for(preemptive in c("None","Panel"))
   if(is.null(attributes)) { attributes <- at } else  {attributes <- rbind(attributes, at)}
 }}
 
-DT <- data.table(results)
-summary <- DT[, .N, by = list(resource,preemptive,reactive)]
+DT <- results %>% arrange(aPSA_ID,name,start_time,end_time) %>% data.table()
+summary <- DT[, .N, by = list(aPSA_ID,resource,preemptive,reactive)]
 source("./sub-files/set-inputs.R")
 
-save(results,file='./run-data/result-toy.Rdata')
-save(at,file='./run-data/attributes-toy.Rdata')
-save(inputs,file='./run-data/inputs-toy.Rdata')
+
+
+# save(results,file='./run-data/result-toy.Rdata')
+# save(at,file='./run-data/attributes-toy.Rdata')
+# save(inputs,file='./run-data/inputs-toy.Rdata')
 # Right now I am treating costs and disutilities as a constant, but in principle this could be done as a PSA too, by changing the first element
 # from c(1) to seq(inputs.init$N_PSA).
 
- s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="None")
- s2 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None" & reactive=="Single" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Single")
- s3 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"&reactive=="Panel" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Panel")
- s4 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"&reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Preemptive Panel")
-# 
- sum_costs <- rbind(s1,s2,s3,s4) %>% arrange(dQALY) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
- sum_costs
+#  s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="None")
+#  s2 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None" & reactive=="Single" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Single")
+#  s3 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"&reactive=="Panel" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Panel")
+#  s4 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"&reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Preemptive Panel")
+# # 
+#  sum_costs <- rbind(s1,s2,s3,s4) %>% arrange(dQALY) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
+#  sum_costs
