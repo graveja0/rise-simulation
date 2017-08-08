@@ -1,7 +1,5 @@
 # Parameters for a 3 conditions model
 
-inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
-
 ###################################
 # Main model parameters
 params <- list(

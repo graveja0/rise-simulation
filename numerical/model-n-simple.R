@@ -2,7 +2,9 @@ library(deSolve)
 
 ss_death <- read.csv("ss-death-2011.csv")
 
-source('params-3.R')
+inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
+
+#source('params-3.R')
 
 ###################################
 # Numerical approach to secular death (very high accuracy!)
@@ -13,7 +15,6 @@ plot(1:2); dev.off()
 
 # Clamped at infinite rate via pmin
 f_40yr_drate <- function(t) inst_rate(pmin(f_40yr_per_d_spline(t), 1),1)
-
 
 # This is for doing numberical integration of a set of numbers at an even interval
 alt_simp_coef <- function(i)
@@ -61,15 +62,10 @@ genModel <- function(t, y, params)
     for(i in 1:n)
     {
       r_d <- f_40yr_drate(t)
+      for(j in 1:n) if(j != i) r_d <- r_d + (r_b[j]*p_bd[j]*(y[map("a_p", j)]+rr_b[j]*y[map("a_a", j)]))/liv
+      
       r_p <- 0
-      for(j in 1:n)
-      {
-        if(j != i)
-        {
-          r_d <- r_d + (r_b[j]*p_bd[j]*(y[map("a_p", j)]+rr_b[j]*y[map("a_a", j)]))/liv
-          r_p <- r_p + p_p*p_o*r_a[j]*y[map("h_u", j)] / liv
-        }
-      }
+      if(p_p > 0) for(j in 1:n) if(j != i) r_p <- r_p + p_p*p_o*r_a[j]*y[map("h_u", j)] / liv
 
       rate <- c(rate, 
         (-r_p-r_a[i]-r_d)*y[map("h_u", i)],
@@ -98,15 +94,13 @@ genModel <- function(t, y, params)
   })
 }
 
-yinit <- rep(0, length(key)*params[["n"]]+1)
-yinit <- c(yinit, 1)
-for(i in 1:params[["n"]]) yinit[map("h_u", i)] <- 1
 
-
-times <- seq(0, 40, by=1/365)  # units of years, increments of days, everyone dies after 120, so simulation is cut short
-print(system.time(out <- dede(yinit, times, genModel, params)))
-
-plot(out)
+# 
+# 
+# times <- seq(0, 40, by=1/365)  # units of years, increments of days, everyone dies after 120, so simulation is cut short
+# print(system.time(out <- dede(yinit, times, genModel, params)))
+# 
+# plot(out)
 
 costs <- function(solution, params)
 {
@@ -165,27 +159,72 @@ costs <- function(solution, params)
   })
 }
 
-expected <- function(params) costs(dede(yinit, times, genModel, params), params)
+# Defined scenarios
+scenarios <- c("none", "reactive-single", "reactive-panel", "preemptive-panel")
 
-sol <- round(expected(params), 4)
-print(sol)
+generate.params <- function(config, i, scenario, disc_rate = 0.03)
+{
+  risks        <- unlist(config$risk[i,])
+  disutilities <- unlist(config$disutility[i,])
+  durations    <- unlist(config$duration[i,])
+  costs        <- unlist(config$cost[i,])
+  
+  # Start building the params list with the length
+  n            <- length(risks)/9
+  params       <- list(n=n)
+  
+  params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
+  params$p_o   <- if(scenario == "none") 0.0 else unname(risks[n*4+1]) # Just uses first one
+  params$p_r   <- if(scenario == "none") 0.0 else unname(risks[n*5+1]) # Juse uses first one
+  params$p_bd  <- unname(risks[1:n + n*2]) # Probability of death as direct result of B
+  params$p_g   <- unname(risks[1:n + n*3]) # Probability of genetic variant
+  params$r_a   <- unname(inst_rate(risks[1:n + n*6], risks[1:n])) # Rate of a
+  params$r_b   <- unname(inst_rate(risks[1:n + n*7], risks[1:n+n])) # Rate of b
+  params$rr_b  <- unname(risks[1:n + n*8]) # Relative Risk of B when on alt treatment
 
-# params['r_a'] <- params['r_a']*0.5
-# params['c_t']  <- 2000
-# round(expected(params), 4)
+  # Costs
+  params$c_a   <- unname(costs[1:n])       # Cost of Event A
+  params$c_bs  <- unname(costs[1:n + n*3]) # Cost of Surviving Event B
+  params$c_bd  <- unname(costs[1:n + n*2]) # Cost of Death from Event B
+  params$c_tx  <- unname(costs[1:n + n*4]) # Cost of Treatment (Daily)
+  params$c_alt <- unname(costs[1:n + n])   # Cost of alternate treatment (Daily)
+  
+  params$c_t   <- unname(costs[n*5 + 1])   # Cost of a test (Only uses first value)
+  
+  params$d_a   <- unname(disutilities[1:n])# Disutility of A
+  params$d_at  <- unname(durations/365)    # Duration of A in years.
+  params$d_b   <- unname(disutilities[1:n+2*n]) # Disutility of B
+  
+  params$disc_rate <- disc_rate       # For computing discount
 
-# Some diagnostic plots
-# 
-# dev.off()
-# plot(out[,'time'],out[,'db'], typ='l', xlim=c(0, 12))
-# abline(h=0, col='red', lty=2)
-# abline(v=11, col='blue', lty=2)
-# abline(v=5, col='green', lty=2)
-# 
-# dev.off()
-# plot(out[,'time'],out[,'b'], typ='l', xlim=c(0, 12))
-# abline(v=10, col='green', lty=2)
-# 
-# dev.off()
-# plot(out[,'time'],out[,'e10'], typ='l', xlim=c(0, 12))
-# abline(v=10, col='green', lty=2)
+  params
+}
+
+generate.initial <- function(scenario, params)
+{
+  n <- params[["n"]]
+  yinit <- rep(0, length(key)*n+1)
+  yinit <- c(yinit, 1)
+  
+  if(scenario == "preemptive-panel")
+  {
+    for(i in 1:n) yinit[map("h_t", i)] <- 1
+    yinit[length(yinit)-1] <- 1 # Second to last is number of tests.
+  } else {
+    for(i in 1:n) yinit[map("h_u", i)] <- 1
+  }
+  
+  yinit
+}
+
+# Config is latin hyper cube variable: drawn.parameter.values
+# i is the point to use from the cube
+# scenario specifies scenario
+# times is the time points to solve (resolution)
+model.run <- function(config, i, scenario, times=seq(0, 40, by=1/365))
+{
+  params  <- generate.params(config, i, scenario)
+  init    <- generate.initial(scenario, params)
+  costs(dede(init, times, genModel, params), params)
+}
+
