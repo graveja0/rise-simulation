@@ -103,8 +103,8 @@ cost.qaly <- function(raw,inputs,psa_id=1)
   
   QALY = qaly.i %>% group_by(name) %>% dplyr::summarise(dQALY = sum(qaly.d)/365.25)
   COST = arrivals %>% filter(discounted_cost>0) %>% group_by(name,resource) %>% dplyr::summarise(dCOST = sum(discounted_cost)) 
-  avgsum <- data.frame(    dQALY = sum(QALY$dQALY)/inputs$vN,
-                           dCOST = sum(COST$dCOST)/inputs$vN)
+  avgsum <- data.frame(    dQALY = sum(QALY$dQALY)/length(unique(raw$name)),
+                           dCOST = sum(COST$dCOST)/length(unique(raw$name)))
   return(avgsum)
 }
 
