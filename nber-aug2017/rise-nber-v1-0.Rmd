@@ -1,0 +1,274 @@
+---
+title: "RISE Simulation v. 1.0"
+author: "John A. Graves"
+output:
+  html_notebook:
+    code_folding: hide
+    fig_caption: yes
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: yes
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      collapsed: yes
+---
+
+# Basic Scenario
+
+This notebook tracks progress running the discrete event simulation for the NBER precision medicine meeting in September 2017.  The basis for the simulation is a "generic" scenario with the following parameters.
+
+  - A population of 40-year old women are at risk for both secular death and an event (A) that happens at a **vRiskA** rate over a **vDurationA** year period.
+  - All those who experience the event incur a cost of **A_c**.
+  - Those who experience the event experience a **disutility\$A** utility decrement for **duration\$A** years, and are placed on a drug for life that costs **cost\$rx**/day.
+  - There is a second event (B) that occurs downstream of Event A, with probability **vRiskB** over a **vDurationB** year period.
+  - Event B has a **vFatalB** case fatality rate with a **cost\$B_Death** cost among the decedents and, among the survivors, incurs a **cost\$B_Survive** cost and a **disutility\$B_Survive** disutility for life.
+  - There is a genetic test available that, if the person tests positive for the gene (prevalence is **vGene**), results in an alternative drug (for life) that costs **alt**/day but reduces the rate of the second event by a relative risk of **vRR_B**. 
+  - The genetic test can be ordered as a single gene test (cost is **cost\$single_test**) or a panel test (cost **cost\$panel_test**).
+  - Each individual is followed for up to 100 years or until death (either due to secular causese or case fatality). 
+  
+The simulation is set up such that it can be scaled to K scenarios with varying parameters for all the above.
+
+# Model Set Up
+
+We first initialize the code and global run parameters.
+```{r,warning=FALSE,message=FALSE}
+rm(list=ls())
+options("scipen"=100, "digits"=4)
+setwd("../")
+inputs.init <- list(
+  vHorizon = 80,
+  vN = 150000,
+  vAge= 40,
+  vN_PSA = 100
+)
+
+source("./sub-files/main_file.R")
+source("./sub-files/costs_simple.R")
+
+## Look at summary statistics
+results <- NULL
+attributes <- NULL
+
+```
+# Run the model
+
+ 
+```{r,cache=TRUE,message=FALSE,warning=FALSE}
+setwd("../")
+run.model = FALSE
+if (run.model)
+{
+
+  for (preemptive in c("None", "Panel"))
+  {
+    #for(reactive in c("None","Single","Panel"))
+    for (reactive in c("None", "Single","Panel"))
+    {
+      if (preemptive == "PREDICT" && reactive == "Panel") {
+        next
+      }
+      if (preemptive == "PREDICT" && reactive == "Single") {
+        next
+      }
+      if (preemptive == "Panel" && reactive == "Single") {
+        next
+      }
+      if (preemptive == "Panel" && reactive == "Panel") {
+        next
+      }
+      #if(preemptive == "None" && reactive == "None") {next}
+      inputs.init$vPreemptive <- preemptive
+      inputs.init$vReactive   <- reactive
+      cat("Running ", preemptive, "-", reactive, "\n")
+      run <- exec.simulation(inputs.init)
+      run$preemptive <- preemptive
+      run$reactive <- reactive
+      at <- arrange(get_mon_attributes(env), name, key, time)
+      at$preemptive <- preemptive
+      at$reactive <- reactive
+      
+      psa_id <-
+        at %>% filter(key == "aPSA_ID") %>% select(name, aPSA_ID = value)
+      run <- run %>% left_join(psa_id, "name")
+      
+      if (is.null(results)) {
+        results <- run
+      } else  {
+        results <- rbind(results, run)
+      }
+      if (is.null(attributes)) {
+        attributes <- at
+      } else  {
+        attributes <- rbind(attributes, at)
+      }
+    }
+  }
+  source("./sub-files/set-inputs.R")
+  save(drawn.parameter.values, file = "./run-data/drawn-parameter-values-toy.Rdata")
+  save(at, file = "./run-data/attributes-toy.Rdata")
+  save(inputs, file = "./run-data/inputs-toy.Rdata")
+  save(results, file = "./run-data/result-toy.Rdata")
+}
+
+load("./run-data/drawn-parameter-values-toy.Rdata")
+#load("./run-data/attributes-toy.Rdata")
+load("./run-data/inputs-toy.Rdata")
+load("./run-data/result-toy.Rdata")
+
+DT <- results %>% arrange(aPSA_ID, name, start_time, end_time) %>% data.table()
+# Map the scenario names to the IDS
+foo <- DT$resource
+for (x in names(scenario.names))
+  foo <-
+  gsub(paste0("SC_", x), paste0("SC_", scenario.names[x]), foo)
+DT$resource_mapped = foo
+
+summary <- DT[, .N, by = list(aPSA_ID, resource_mapped, preemptive, reactive)]
+
+```
+
+# Get Summary Information
+```{r,warning=FALSE,message=FALSE}
+library(DT)
+summary %>% mutate(temp = resource_mapped) %>% 
+  separate(resource_mapped,into = c("resource","scenario"),sep="_SC_") %>% 
+  mutate(scenario = ifelse(is.na(scenario),"global",scenario)) %>% select(aPSA_ID,preemptive,reactive,scenario,resource,N) %>% 
+  reshape2::dcast(aPSA_ID+preemptive+reactive+resource~scenario,value.var="N") %>% 
+  select(aPSA_ID,preemptive,reactive,resource,global, everything()) %>% 
+  unite(strategy,preemptive,reactive,sep="-") %>% group_by(strategy,resource) %>% 
+  summarise_at(.vars = c("global",as.character(scenario.names)),.funs=function(x) round(mean(x,na.rm=TRUE),1)) %>% arrange(resource,strategy,global) -> summary.dt
+summary.dt %>% datatable(options = list(pageLength = 50),filter = 'top') 
+```
+
+# Estimate QALY and Costs
+```{r}
+source("../sub-files/costs_simple.R")
+s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>%
+  rename(dQALY_None = dQALY , dCOST_None = dCOST) 
+s2 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% 
+  rename(dQALY_Panel_None = dQALY , dCOST_Panel_None = dCOST) 
+s3 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Panel" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Panel = dQALY , dCOST_None_Panel = dCOST) 
+s4 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Single" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Single = dQALY , dCOST_None_Single = dCOST) 
+
+Sim <- cbind(s1,s2,s3,s4,drawn.parameter.values$global)
+
+```
+
+```{r}
+setwd("../")
+source("./sub-files/metamodeling-functions.R")
+
+Strategies <-
+  c("None",
+    "Panel_None",
+    "None_Panel",
+    "None_Single")
+
+#Determine the number of strategies
+ndep <- length(Strategies)
+
+#Create vector of variable names
+Names <- colnames(Sim)
+Parms <- Sim[, -grep("QALY|COST", colnames(Sim))] %>% dplyr::select(dplyr::contains("Probability"))
+#Get parameter names
+paramNames <- colnames(Parms)
+indep <- ncol(Parms)
+Outcomes <- Sim[, grep("QALY|COST", colnames(Sim))]
+
+lambda <- 50000
+
+Sim <- Sim %>% mutate(NHB_None = dQALY_None - dCOST_None / lambda,
+                      NHB_Panel_None = dQALY_Panel_None - dCOST_Panel_None / lambda,
+                      NHB_None_Panel = dQALY_None_Panel - dCOST_None_Panel / lambda,
+                      NHB_None_Single = dQALY_None_Single - dCOST_None_Single / lambda) %>% 
+  mutate(Iteration = row_number())
+NHB <- Sim %>% dplyr::select(dplyr::contains("NHB"))
+
+
+```
+
+# Linear Metamodel
+
+   The first example for linear metamodel will be on the outcomes (i.e., effectivenes, costs and NHB). We will run two versions of the metamodel based on how we incorporate the simulation parameters (**Important**: In the metamodel the simluation parameters will act as the independent variables): 
+   
+   1. With unstandardized values of the simulation paramaters $x_j$ and 
+   2. With standardized values of the simulation paramaters $z_j$, defined as 
+   $$z_j = \frac{x_j-\bar{x_j}}{\sigma_j}$$
+   where $\bar{x_j}$ and $\sigma_j$ are the mean and standard deviation of $x_j$, respectively. We can standardized the simulation parameters within the linear regression specification in `R` using the command `scale`.
+   
+   
+```{r}
+require(tidyr)
+require(broom)
+# Unscaled #
+Cost.Fit <- c("None","Panel_None","None_Panel","None_Single") %>% purrr::map(~broom::tidy(lm(
+  as.formula(paste0("dCOST_",.x,"~",paste0(colnames(Parms),collapse="+")))
+  ,data=Sim)))
+Effectiveness.Fit <- c("None","Panel_None","None_Panel","None_Single") %>% purrr::map(~tidy(lm(
+  as.formula(paste0("dQALY_",.x,"~",paste0(colnames(Parms),collapse="+")))
+  ,data=Sim)))
+NHB.Fit <- c("None","Panel_None","None_Panel","None_Single") %>% purrr::map(~tidy(lm(
+  as.formula(paste0("NHB_",.x,"~",paste0(colnames(Parms),collapse="+")))
+  ,data=Sim)))
+
+# Scaled
+Cost.Scaled.Fit <- c("None","Panel_None","None_Panel","None_Single") %>% purrr::map(~tidy(lm(
+  as.formula(paste0("dCOST_",.x,"~",paste0(paste0("scale(",colnames(Parms),")"),collapse="+")))
+  ,data=Sim)))
+Effectiveness.Scaled.Fit <- c("None","Panel_None","None_Panel","None_Single") %>% purrr::map(~tidy(lm(
+  as.formula(paste0("dQALY_",.x,"~",paste0(paste0("scale(",colnames(Parms),")"),collapse="+")))
+  ,data=Sim)))
+NHB.Scaled.Fit <- c("None","Panel_None","None_Panel","None_Single") %>% purrr::map(~tidy(lm(
+  as.formula(paste0("NHB_",.x,"~",paste0(paste0("scale(",colnames(Parms),")"),collapse="+")))
+  ,data=Sim)))
+
+
+```
+
+## One Way Sensitivity Analysis
+
+```{r}
+Sim.long<- melt(Sim, id.vars=c("Iteration",grep("Probability",Names,value=TRUE)),measure.vars=c("NHB_None","NHB_Panel_None","NHB_None_Panel","NHB_None_Single"))
+```
+
+```{r,fig.cap="One Way Sensitivity Analysis"}
+parm<-'vProbabilityOrder'
+range<-c(0,1)
+OneWaySA(Strategies,Parms,NHB,parm) 
+```
+
+## Threshold Analysis
+
+```{r}
+# Need to fit a model over all the strategies
+
+NHB.Scaled.Fit <- Strategies %>% purrr::map(~tidy(lm(
+  as.formula(paste0("NHB_",.x,"~",paste0(paste0("scale(",colnames(Parms),")"),collapse="+")))
+  ,data=Sim)))
+names(NHB.Scaled.Fit) = Strategies
+
+Strategy.Combinations <- t(combn(Strategies,2))  %>% data.frame() %>% filter(as.character(X1)!=as.character(X2)) %>% 
+  mutate_all(.funs=as.character)
+
+delta <- map2(.x=as.character(Strategy.Combinations$X1),.y=as.character(Strategy.Combinations$X2),.f=~NHB.Scaled.Fit[[.x]]$estimate/NHB.Scaled.Fit[[.y]]$estimate) 
+names(delta) = paste0(as.character(Strategy.Combinations$X1),"_vs_",as.character(Strategy.Combinations$X2))
+delta <- delta %>% bind_rows()
+
+zeta <- delta %>% purrr::map(~.x[1]/.x[-1]) %>% bind_rows()
+
+TornadoOpt(Parms,NHB)
+```
+
+
+```{r}
+parm1<-'vProbabilityRead'
+parm2<-'vProbabilityOrder'
+range1<-c(0,1)
+range2<-c(0,1)
+TwoWaySA(Strategies,Parms,Outcomes=NHB,parm1,parm2,range1,range2)
+```
+
