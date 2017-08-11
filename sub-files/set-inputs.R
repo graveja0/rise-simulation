@@ -1,4 +1,6 @@
 risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]]), seq(nrow(t(drawn.parameter.values[["risk"]])))), colnames(drawn.parameter.values[["risk"]]))
+global.as.list <- setNames(split(t(drawn.parameter.values[["global"]]), seq(nrow(t(drawn.parameter.values[["global"]])))), colnames(drawn.parameter.values[["global"]]))
+
 inputs.main <- append(list(
   vAge = 40,
   vGender = 1,
@@ -7,6 +9,7 @@ inputs.main <- append(list(
   vHorizon  = 10,
   vN = 100
 ),risks.as.list)
+inputs.main <- append(inputs.main,global.as.list)
 disutility.as.list <- setNames(split(t(drawn.parameter.values[["disutility"]]), seq(nrow(t(drawn.parameter.values[["disutility"]])))), colnames(drawn.parameter.values[["disutility"]]))
 disutilities = append(list(
   secular_death = 1
@@ -26,5 +29,6 @@ cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]]), seq(nrow(t(d
 costs = append(list(
   panel_test=250
 ),cost.as.list)
+
 
 inputs <- append(append(inputs.init,inputs.main),list(disutilities=disutilities,durations=durations,type=type,costs=costs))

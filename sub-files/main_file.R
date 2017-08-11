@@ -7,7 +7,9 @@ pkg = list("simmer",
            "dplyr",
            "msm",
            "data.table",
-           "deSolve")
+           "deSolve",
+           "scales",
+           "knitr")
 
 invisible(lapply(pkg, require, character.only = TRUE))
 # contains <- dplyr::contains()
@@ -32,6 +34,8 @@ paste("initialize_patient <- function(traj, inputs)
       set_attribute(\"aAge\", function(attrs) attrs[['aAgeInitial']]) %>% 
       set_attribute(\"aGender\", function() inputs$vGender) %>% 
       set_attribute(\"aPSA_ID\",function() sample(seq(inputs$vN_PSA),1)) %>% 
+      set_attribute(\"aControlOrder\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]]))) %>%
+      set_attribute(\"aControlRead\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]]))) %>% 
       ") %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGene_",.x,"\", function(attrs) sample(1:2,1,prob=c(inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]],1-inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]])))"," %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGenotyped_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
@@ -211,6 +215,8 @@ exec.simulation <- function(inputs)
   # 
   
   risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]]), seq(nrow(t(drawn.parameter.values[["risk"]])))), colnames(drawn.parameter.values[["risk"]]))
+  global.as.list <- setNames(split(t(drawn.parameter.values[["global"]]), seq(nrow(t(drawn.parameter.values[["global"]])))), colnames(drawn.parameter.values[["global"]]))
+  
   inputs.main <- append(list(
     vAge = 40,
     vGender = 1,
@@ -219,6 +225,7 @@ exec.simulation <- function(inputs)
     vHorizon  = 10,
     vN = 100
   ),risks.as.list)
+  inputs.main <- append(inputs.main,global.as.list)
   disutility.as.list <- setNames(split(t(drawn.parameter.values[["disutility"]]), seq(nrow(t(drawn.parameter.values[["disutility"]])))), colnames(drawn.parameter.values[["disutility"]]))
   disutilities = append(list(
     secular_death = 1
@@ -247,7 +254,7 @@ exec.simulation <- function(inputs)
   
   env %>%
     add_generator("patient", traj, at(rep(0, inputs$vN)), mon=2) %>%
-    run(365*inputs$vHorizon+1) %>% # Simulate just past horizon
+    simmer::run(365*inputs$vHorizon+1) %>% # Simulate just past horizon
     wrap()
   
   get_mon_arrivals(env, per_resource = T)

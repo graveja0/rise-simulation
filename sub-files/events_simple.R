@@ -33,7 +33,8 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
           continue=c(TRUE, TRUE),
           trajectory(\"not have\") %>%
           branch(
-          function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
+          #function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
+          function(attrs) attrs[[\'aControlOrder\']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory(\"not order\") %>% timeout(0),
           trajectory(\"order reactive test\") %>% set_attribute(\"aGenotyped_TK\", 1) %>% mark(\"single_test_TK\") %>% set_attribute(\"aOrdered_test_TK\", 1)
@@ -48,7 +49,8 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
           continue=c(TRUE, TRUE),
           trajectory(\"not panel tested\") %>%
           branch(
-          function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
+          #function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
+          function(attrs) attrs[[\'aControlOrder\']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory(\"not order\") %>% timeout(0),
           trajectory(\"order reactive test\") %>% panel_test() %>% set_attribute(\"aOrdered_test_TK\", 1)
@@ -65,7 +67,8 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
   traj %>%
     set_attribute(\"aDrug_TK\", function(attrs)
       if(attrs[[\"aGene_TK\"]]==1 & attrs[[\"aGenotyped_TK\"]]==1 &
-                 (attrs[[\'aOrdered_test_TK\']] == 1 | attrs[[\'aControlRead_TK\']]==1))
+                 #(attrs[[\'aOrdered_test_TK\']] == 1 | attrs[[\'aControlRead_TK\']]==1))
+                  (attrs[[\'aOrdered_test_TK\']] == 1 | attrs[[\'aControlRead\']]==1))
                  {return(2)} else {return(1)}) %>%
                  set_attribute(\"aTreat_TK\",1) %>%
                  branch(
@@ -83,8 +86,9 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
   traj %>% 
     #physician behavior
     #set_attribute(\"aProbabilityOrder_TK\",function() c(inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]])) %>% 
-    set_attribute(\"aControlOrder_TK\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]]))) %>%
-                   set_attribute(\"aControlRead_TK\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]]))) %>% 
+    # This version allows for differential ordering & reading by scenario. 
+    #set_attribute(\"aControlOrder_TK\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]]))) %>%
+     #             set_attribute(\"aControlRead_TK\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]]))) %>% 
 
                    A_TK_reactive_strategy(inputs) %>%
                    #assign drug

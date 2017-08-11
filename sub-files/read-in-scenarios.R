@@ -23,19 +23,32 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
   names.temp <- names(params.full)
   for (y in scenario.names) names.temp <- gsub(y,paste0("SC_",names(scenario.names[which(scenario.names==y)])),names.temp)
   names(params.full) <- gsub("psa_param","psa",names.temp)
-  params.full %>% melt(id.vars = c("param","psatype","type")) %>% mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%
-    mutate(variable = gsub("_psa1|_psa2","",variable) , paramtype = gsub("^_","",paramtype)) %>%
-    mutate(paramtype = ifelse(paramtype=="","value",paramtype)) %>%
-    mutate(paramtype = ifelse(psatype=="uniform",gsub("psa1","min",paramtype),paramtype)) %>%
-    mutate(paramtype = ifelse(psatype=="uniform",gsub("psa2","max",paramtype),paramtype)) %>%
-    mutate(paramtype = ifelse(psatype=="beta",gsub("psa1","shape1",paramtype),paramtype)) %>%
-    mutate(paramtype = ifelse(psatype=="beta",gsub("psa2","shape2",paramtype),paramtype)) %>%
-    rename(scenario = variable) %>% dcast(param+type+psatype+scenario~paramtype) %>%
-    unite(parameter,c("param","scenario")) -> params2
+  if (tt!="global")
+  {
+    params.full %>% melt(id.vars = c("param","psatype","type")) %>% mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%
+      mutate(variable = gsub("_psa1|_psa2","",variable) , paramtype = gsub("^_","",paramtype)) %>%
+      mutate(paramtype = ifelse(paramtype=="","value",paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="uniform",gsub("psa1","min",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="uniform",gsub("psa2","max",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="beta",gsub("psa1","shape1",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="beta",gsub("psa2","shape2",paramtype),paramtype)) %>%
+      rename(scenario = variable) %>% dcast(param+type+psatype+scenario~paramtype) %>%
+      unite(parameter,c("param","scenario")) -> params2
+  } else 
+  {
+    params.full %>% melt(id.vars = c("param","psatype","type")) %>% mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%
+      mutate(variable = gsub("_psa1|_psa2","",variable) , paramtype = gsub("^_","",paramtype)) %>%
+      filter(variable=="SC_A") %>% 
+      mutate(paramtype = ifelse(paramtype=="","value",paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="uniform",gsub("psa1","min",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="uniform",gsub("psa2","max",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="beta",gsub("psa1","shape1",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="beta",gsub("psa2","shape2",paramtype),paramtype)) %>%
+      rename(scenario = variable) %>% dcast(param+type+psatype+scenario~paramtype) %>% 
+      mutate(scenario = "global")  %>% rename(parameter = param)-> params2
+  }
   params.as.list <- setNames(split(params2, 1:nrow(params2)), params2$parameter) %>% purrr::map(~as.list(.x))
   params <- unlist(lapply(params.as.list,function(x) x$value))
-
-
 
   X <- randomLHS(inputs.init$vN_PSA, length(params))
   colnames(X) = names(params)
@@ -62,6 +75,7 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
 
 drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(tt=.x,PSA.N=inputs.init$vN_PSA) )
 names(drawn.parameter.values) <- unique(scenarios$type)
+
 
 # risks.as.list <- setNames(split(t(drawn.parameter.values[["risk"]][ii,]), seq(nrow(t(drawn.parameter.values[["risk"]][ii,])))), colnames(drawn.parameter.values[["risk"]]))
 # inputs.main <- append(list(
