@@ -11,9 +11,9 @@ rm(list=ls())
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 100,
+  vN = 10000000,
   vAge= 40,
-  vN_PSA = 2
+  vN_PSA = 100
 )
 
 source("./sub-files/main_file.R")
@@ -60,8 +60,6 @@ summary <- DT[, .N, by = list(aPSA_ID,resource,preemptive,reactive)]
 source("./sub-files/set-inputs.R")
 
 # Get Overall Results
-
-
 s1 <- cost.qaly(subset(results,preemptive=="None"&reactive=="None"),inputs) %>% mutate(strategy="None")
 s2 <- cost.qaly(subset(results,preemptive=="None"&reactive=="Single"),inputs) %>% mutate(strategy="Reactive Single")
 s3 <- cost.qaly(subset(results,preemptive=="None"&reactive=="Panel"),inputs) %>% mutate(strategy="Reactive Panel")
