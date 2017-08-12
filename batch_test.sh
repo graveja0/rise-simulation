@@ -6,7 +6,7 @@
 #SBATCH -o rise_1_%A_%a.out
 #SBATCH -e rise_1_%A_%a.err
 #SBATCH --mail-type=END,FAIL
-#SBATCH --mail-user=zilu.zhou@vanderbilt.edu
+#SBATCH --mail-user=john.graves@vanderbilt.edu
 
 module load GCC/5.4.0-2.26  OpenMPI/1.10.3 R/3.3.3-X11-20160819
 R --version
