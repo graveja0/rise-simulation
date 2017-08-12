@@ -3,9 +3,9 @@ rm(list=ls())
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 10000,
+  vN = 100,
   vAge= 40,
-  vN_PSA = 15
+  vN_PSA = 2
 )
 
 source("./sub-files/main_file.R")
@@ -17,6 +17,7 @@ attributes <- NULL
 
 preemptive = "None"
 reactive = "None"
+select <- dplyr::select
 
 for(preemptive in c("None","Panel"))
 {
@@ -61,7 +62,8 @@ source("./sub-files/set-inputs.R")
 #  s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="None")
 #  s2 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None" & reactive=="Single" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Single")
 #  s3 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"&reactive=="Panel" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Panel")
-#  s4 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"&reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Preemptive Panel")
+
+                                        #  s4 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"&reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Preemptive Panel")
 # # 
 #  sum_costs <- rbind(s1,s2,s3,s4) %>% arrange(dQALY) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
 #  sum_costs

@@ -32,8 +32,8 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
       mutate(paramtype = ifelse(psatype=="uniform",gsub("psa2","max",paramtype),paramtype)) %>%
       mutate(paramtype = ifelse(psatype=="beta",gsub("psa1","shape1",paramtype),paramtype)) %>%
       mutate(paramtype = ifelse(psatype=="beta",gsub("psa2","shape2",paramtype),paramtype)) %>%
-      rename(scenario = variable) %>% dcast(param+type+psatype+scenario~paramtype) %>%
-      unite(parameter,c("param","scenario")) -> params2
+      rename(scenario = variable) %>% reshape2::dcast(param+type+psatype+scenario~paramtype) %>% data.frame() %>%
+      tidyr::unite(parameter,param,scenario) -> params2
   } else 
   {
     params.full %>% melt(id.vars = c("param","psatype","type")) %>% mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%

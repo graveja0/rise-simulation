@@ -12,6 +12,7 @@ pkg = list("simmer",
            "knitr")
 
 invisible(lapply(pkg, require, character.only = TRUE))
+
 # contains <- dplyr::contains()
 # select <- dplyr::select()
 
