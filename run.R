@@ -5,15 +5,16 @@
 #                                           4. Close the screen session and log out of the compute node
 #                                           5. To interact with your process again, ssh to the compute node and reattach
 #                                           the screen.
+# ssh vmp1018
 
 rm(list=ls())
 
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 10000000,
+  vN = 5000000,
   vAge= 40,
-  vN_PSA = 100
+  vN_PSA = 200
 )
 
 source("./sub-files/main_file.R")
