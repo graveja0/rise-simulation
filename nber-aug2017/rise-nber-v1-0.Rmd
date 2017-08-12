@@ -37,11 +37,12 @@ The simulation is set up such that it can be scaled to K scenarios with varying 
 We first initialize the code and global run parameters.
 ```{r,warning=FALSE,message=FALSE}
 rm(list=ls())
+run.model = TRUE
 options("scipen"=100, "digits"=4)
 setwd("../")
 inputs.init <- list(
-  vHorizon = 80,
-  vN = 150000,
+  vHorizon = 10,
+  vN = 1000000,
   vAge= 40,
   vN_PSA = 100
 )
@@ -59,7 +60,7 @@ attributes <- NULL
  
 ```{r,cache=TRUE,message=FALSE,warning=FALSE}
 setwd("../")
-run.model = FALSE
+
 if (run.model)
 {
 
@@ -147,14 +148,19 @@ summary.dt %>% datatable(options = list(pageLength = 50),filter = 'top')
 # Estimate QALY and Costs
 ```{r}
 source("../sub-files/costs_simple.R")
-s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>%
-  rename(dQALY_None = dQALY , dCOST_None = dCOST) 
-s2 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% 
-  rename(dQALY_Panel_None = dQALY , dCOST_Panel_None = dCOST) 
-s3 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Panel" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Panel = dQALY , dCOST_None_Panel = dCOST) 
-s4 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Single" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Single = dQALY , dCOST_None_Single = dCOST) 
-
-Sim <- cbind(s1,s2,s3,s4,drawn.parameter.values$global)
+if (run.model) 
+{
+  s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>%
+    rename(dQALY_None = dQALY , dCOST_None = dCOST) 
+  s2 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% 
+    rename(dQALY_Panel_None = dQALY , dCOST_Panel_None = dCOST) 
+  s3 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Panel" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Panel = dQALY , dCOST_None_Panel = dCOST) 
+  s4 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Single" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Single = dQALY , dCOST_None_Single = dCOST) 
+  
+  Sim <- cbind(s1,s2,s3,s4,drawn.parameter.values$global)
+} else {
+  save(Sim,file="../run-data/simulation-results.Rdata")
+}
 
 ```
 
@@ -236,7 +242,7 @@ Sim.long<- melt(Sim, id.vars=c("Iteration",grep("Probability",Names,value=TRUE))
 ```
 
 ```{r,fig.cap="One Way Sensitivity Analysis"}
-parm<-'vProbabilityOrder'
+parm<-'vProbabilityRead'
 range<-c(0,1)
 OneWaySA(Strategies,Parms,NHB,parm) 
 ```

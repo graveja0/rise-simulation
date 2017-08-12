@@ -51,19 +51,27 @@ DT <- results %>% arrange(aPSA_ID,name,start_time,end_time) %>% data.table()
 summary <- DT[, .N, by = list(aPSA_ID,resource,preemptive,reactive)]
 source("./sub-files/set-inputs.R")
 
+# Get Overall Results
+
+s1 <- cost.qaly(subset(results,preemptive=="None"&reactive=="None"),inputs) %>% mutate(strategy="None")
+s2 <- cost.qaly(subset(results,preemptive=="None"&reactive=="Single"),inputs) %>% mutate(strategy="Reactive Single")
+s3 <- cost.qaly(subset(results,preemptive=="None"&reactive=="Panel"),inputs) %>% mutate(strategy="Reactive Panel")
+s4 <- cost.qaly(subset(results,preemptive=="Panel"&reactive=="None"),inputs) %>% mutate(strategy="Preemptive Panel")
+
+overall_summary <- rbind(s1,s2,s3,s4) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
+overall_summary
+save(overall_summary,file="../run-data/overall-summary.Rdata")
 
 
-# save(results,file='./run-data/result-toy.Rdata')
-# save(at,file='./run-data/attributes-toy.Rdata')
-# save(inputs,file='./run-data/inputs-toy.Rdata')
-# Right now I am treating costs and disutilities as a constant, but in principle this could be done as a PSA too, by changing the first element
-# from c(1) to seq(inputs.init$N_PSA).
+# Get PSA REsults
+s1.i <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>%
+  rename(dQALY_None = dQALY , dCOST_None = dCOST) 
+s2.i <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% 
+  rename(dQALY_Panel_None = dQALY , dCOST_Panel_None = dCOST) 
+s3.i <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Panel" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Panel = dQALY , dCOST_None_Panel = dCOST) 
+s4.i <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Single" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Single = dQALY , dCOST_None_Single = dCOST) 
 
-#  s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="None")
-#  s2 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None" & reactive=="Single" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Single")
-#  s3 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"&reactive=="Panel" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Reactive Panel")
+Sim <- cbind(s1.i,s2.i,s3.i,s4.i,drawn.parameter.values$global)
+save(Sim,file="../run-data/simulation-results.Rdata")
 
-                                        #  s4 <- c(1) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"&reactive=="None" & aPSA_ID==.x),inputs=inputs)) %>% mutate(strategy="Preemptive Panel")
-# # 
-#  sum_costs <- rbind(s1,s2,s3,s4) %>% arrange(dQALY) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
-#  sum_costs
+
