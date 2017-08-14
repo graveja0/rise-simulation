@@ -12,9 +12,9 @@ rm(list=ls())
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 5000,
+  vN = 1500000,
   vAge= 40,
-  vN_PSA = 20
+  vN_PSA = 200
 )
 
 source("./sub-files/main_file.R")
