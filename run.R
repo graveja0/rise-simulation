@@ -59,6 +59,7 @@ for(preemptive in c("None","Panel"))
 DT <- results %>% arrange(aPSA_ID,name,start_time,end_time) %>% data.table()
 summary <- DT[, .N, by = list(aPSA_ID,resource,preemptive,reactive)]
 source("./sub-files/set-inputs.R")
+save(drawn.parameter.values, file = "./run-data/drawn-parameter-values.Rdata")
 
 # Get Overall Results
 s1 <- cost.qaly(subset(results,preemptive=="None"&reactive=="None"),inputs) %>% mutate(strategy="None")

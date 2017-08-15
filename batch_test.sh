@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --mem=20G
+#SBATCH --mem=150G
 #SBATCH -t 0-50:00:00
 #SBATCH -o rise_1_%A_%a.out
 #SBATCH -e rise_1_%A_%a.err
