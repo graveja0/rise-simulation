@@ -7,8 +7,9 @@
 #                                           the screen.
 # ssh vmp1018
 
-rm(list=ls())
 
+rm(list=ls())
+run.id <- "behavioral-global"
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
@@ -30,8 +31,7 @@ select <- dplyr::select
 
 for(preemptive in c("None","Panel"))
 {
-  #for(reactive in c("None","Single","Panel"))
-  for(reactive in c("None","Panel"))
+  for(reactive in c("None","Single","Panel"))
   {
     if(preemptive == "PREDICT" && reactive == "Panel") {next}
     if(preemptive == "PREDICT" && reactive == "Single") {next}
@@ -59,7 +59,7 @@ for(preemptive in c("None","Panel"))
 DT <- results %>% arrange(aPSA_ID,name,start_time,end_time) %>% data.table()
 summary <- DT[, .N, by = list(aPSA_ID,resource,preemptive,reactive)]
 source("./sub-files/set-inputs.R")
-save(drawn.parameter.values, file = "./run-data/drawn-parameter-values.Rdata")
+save(drawn.parameter.values, file = paste0("./run-data/drawn-parameter-values-",run.id,".Rdata"))
 
 # Get Overall Results
 s1 <- cost.qaly(subset(results,preemptive=="None"&reactive=="None"),inputs) %>% mutate(strategy="None")
@@ -69,7 +69,7 @@ s4 <- cost.qaly(subset(results,preemptive=="Panel"&reactive=="None"),inputs) %>%
 
 overall_summary <- rbind(s1,s2,s3,s4) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
 overall_summary
-save(overall_summary,file="./run-data/overall-summary.Rdata")
+save(overall_summary,file=paste0("./run-data/overall-summary-",run.id,".Rdata"))
 
 
 # Get PSA REsults
@@ -81,6 +81,6 @@ s3.i <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptiv
 s4.i <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Single" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Single = dQALY , dCOST_None_Single = dCOST) 
 
 Sim <- cbind(s1.i,s2.i,s3.i,s4.i,drawn.parameter.values$global)
-save(Sim,file="./run-data/simulation-results.Rdata")
+save(Sim,file=paste0("./run-data/simulation-results-",run.id,".Rdata"))
 
 
