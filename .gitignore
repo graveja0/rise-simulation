@@ -3,3 +3,8 @@
 .RData
 .Ruserdata
 *.Rproj
+*.err
+*.out
+run-data/
+core.*
+temp/
