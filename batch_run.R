@@ -1,6 +1,6 @@
 rm(list=ls())
 run.id <- "behavioral-global-test"
-scenario = c("Panel","None")
+scenario = c("None","Single")
 
 preemptive = scenario[1]
 reactive = scenario[2]
@@ -8,13 +8,14 @@ reactive = scenario[2]
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 1500000,
+  vN = 1000,
   vAge= 40,
-  vN_PSA = 200
+  vN_PSA = 2
 )
 
 source("./sub-files/main_file.R")
 source("./sub-files/costs_simple.R")
+source("./sub-files/set-inputs.R")
 
 ## Look at summary statistics
 results <- NULL

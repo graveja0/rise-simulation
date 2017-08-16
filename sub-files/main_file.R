@@ -170,8 +170,8 @@ source("./temp/TEMP-create-event-registry.R")
 
 
 #### Counters
-counters.scenarios <- scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),paste0(c("A_TK","A_c_TK","B_TK","B_Survive_TK","B_Death_TK","treat_TK","rx_TK","alt_TK","single_test_TK")))) %>% unlist()
-counters <- c("time_in_model","secular_death",counters.scenarios,"panel_test")
+counters.scenarios <- scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),paste0(c("A_TK","A_c_TK","B_TK","B_Survive_TK","B_Death_TK","treat_TK","rx_TK","alt_TK")))) %>% unlist()
+counters <- c("time_in_model","secular_death",counters.scenarios,"panel_test","single_test")
 
 
 source('./sub-files/event_main_loop_simple.R')
@@ -244,7 +244,8 @@ exec.simulation <- function(inputs)
   
   cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]]), seq(nrow(t(drawn.parameter.values[["cost"]])))), colnames(drawn.parameter.values[["cost"]]))
   costs = append(list(
-    panel_test=250
+    panel_test=drawn.parameter.values$global$panel_test,
+    single_test = drawn.parameter.values$global$single_test
   ),cost.as.list)
   
   inputs <- append(append(inputs.init,inputs.main),list(disutilities=disutilities,durations=durations,type=type,costs=costs))

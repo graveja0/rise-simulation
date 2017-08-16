@@ -37,7 +37,7 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
           function(attrs) attrs[[\'aControlOrder\']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory(\"not order\") %>% timeout(0),
-          trajectory(\"order reactive test\") %>% set_attribute(\"aGenotyped_TK\", 1) %>% mark(\"single_test_TK\") %>% set_attribute(\"aOrdered_test_TK\", 1)
+          trajectory(\"order reactive test\") %>% set_attribute(\"aGenotyped_TK\", 1) %>% mark(\"single_test\") %>% set_attribute(\"aOrdered_test_TK\", 1)
           ), 
           trajectory(\"have test results\") %>%  timeout(0)
           )

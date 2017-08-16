@@ -27,7 +27,8 @@ type = append(list(
 
 cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]]), seq(nrow(t(drawn.parameter.values[["cost"]])))), colnames(drawn.parameter.values[["cost"]]))
 costs = append(list(
-  panel_test=250
+  panel_test=drawn.parameter.values$global$panel_test,
+  single_test = drawn.parameter.values$global$single_test
 ),cost.as.list)
 
 
