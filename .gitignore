@@ -9,3 +9,7 @@ packrat/*
 nber-aug2017/rise-nber-v1-0_cache/
 run-data/
 packrat/lib*/
+*.err
+*.out
+core.*
+temp/

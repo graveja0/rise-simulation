@@ -1,6 +1,6 @@
 rm(list=ls())
 run.id <- "behavioral-global-test"
-scenario = c("None","None")
+scenario = c("Panel","None")
 
 preemptive = scenario[1]
 reactive = scenario[2]
