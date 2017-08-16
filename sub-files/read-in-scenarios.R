@@ -10,7 +10,7 @@ scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-desc
 lots.of.letters <- c(LETTERS, sapply(LETTERS, function(x) paste0(x, LETTERS)))
 scenario.ids <- paste0("SC_",lots.of.letters[1:length(scenario.names)])
 scenario.mapping <- cbind.data.frame(scenario.id = scenario.ids,scenarnio.name = scenario.names)
-secnario.mapping <- scenario.names
+scenario.mapping <- scenario.names
 names(scenario.names) = gsub("SC_","",scenario.ids)
 
 tt <- "risk"
@@ -32,7 +32,9 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
       mutate(paramtype = ifelse(psatype=="uniform",gsub("psa2","max",paramtype),paramtype)) %>%
       mutate(paramtype = ifelse(psatype=="beta",gsub("psa1","shape1",paramtype),paramtype)) %>%
       mutate(paramtype = ifelse(psatype=="beta",gsub("psa2","shape2",paramtype),paramtype)) %>%
-      rename(scenario = variable) %>% reshape2::dcast(param+type+psatype+scenario~paramtype) %>% data.frame() %>%
+      mutate(paramtype = ifelse(psatype=="constant",gsub("psa1","constant1",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="constant",gsub("psa2","constant2",paramtype),paramtype)) %>%
+      rename(scenario = variable) %>% reshape2::dcast(param+psatype+type+scenario~paramtype) %>% data.frame() %>% 
       tidyr::unite(parameter,param,scenario) -> params2
   } else 
   {
@@ -44,6 +46,8 @@ draw.latin.hypercube <- function(tt,PSA.N=10) {
       mutate(paramtype = ifelse(psatype=="uniform",gsub("psa2","max",paramtype),paramtype)) %>%
       mutate(paramtype = ifelse(psatype=="beta",gsub("psa1","shape1",paramtype),paramtype)) %>%
       mutate(paramtype = ifelse(psatype=="beta",gsub("psa2","shape2",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="constant",gsub("psa1","constant1",paramtype),paramtype)) %>%
+      mutate(paramtype = ifelse(psatype=="constant",gsub("psa2","constant2",paramtype),paramtype)) %>%
       rename(scenario = variable) %>% dcast(param+type+psatype+scenario~paramtype) %>% 
       mutate(scenario = "global")  %>% rename(parameter = param)-> params2
   }

@@ -13,9 +13,9 @@ run.id <- "behavioral-global"
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 1500000,
+  vN = 150,
   vAge= 40,
-  vN_PSA = 200
+  vN_PSA = 2
 )
 
 source("./sub-files/main_file.R")
