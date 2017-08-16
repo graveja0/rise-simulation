@@ -65,13 +65,13 @@ genModel <- function(t, y, params)
       for(j in 1:n) if(j != i) r_d <- r_d + (r_b[j]*p_bd[j]*(y[map("a_p", j)]+rr_b[j]*y[map("a_a", j)]))/liv
       
       r_p <- 0
-      if(p_p > 0) for(j in 1:n) if(j != i) r_p <- r_p + p_p*p_o*r_a[j]*y[map("h_u", j)] / liv
+      if(p_p > 0) for(j in 1:n) if(j != i) r_p <- r_p + p_p*p_o[i]*r_a[j]*y[map("h_u", j)] / liv
 
       rate <- c(rate, 
         (-r_p-r_a[i]-r_d)*y[map("h_u", i)],
         r_p*y[map("h_u", i)] + (-r_a[i]-r_d)*y[map("h_t", i)],
-        r_a[i]*(1-p_o*p_g[i])*y[map("h_u", i)]+r_a[i]*(1-p_g[i]*p_r)*y[map("h_t", i)]-r_b[i]*y[map("a_p", i)] -r_d*y[map("a_p", i)],
-        r_a[i]*p_o*p_g[i]*y[map("h_u", i)]+r_a[i]*p_g[i]*p_r*y[map("h_t", i)] -r_b[i]*rr_b[i]*y[map("a_a", i)] -r_d*y[map("a_a", i)],
+        r_a[i]*(1-p_o[i]*p_g[i])*y[map("h_u", i)]+r_a[i]*(1-p_g[i]*p_r[i])*y[map("h_t", i)]-r_b[i]*y[map("a_p", i)] -r_d*y[map("a_p", i)],
+        r_a[i]*p_o[i]*p_g[i]*y[map("h_u", i)]+r_a[i]*p_g[i]*p_r[i]*y[map("h_t", i)] -r_b[i]*rr_b[i]*y[map("a_a", i)] -r_d*y[map("a_a", i)],
         r_a[i]*y[map("h_u", i)]+r_a[i]*y[map("h_t", i)],
         r_d*y[map("a_q", i)],
         r_d*y[map("a_q", i)] - if(t < d_at[i]) 0 else lagderiv(t-d_at[i], map("a_l",i)),
@@ -83,7 +83,7 @@ genModel <- function(t, y, params)
       )
     }
 
-    tests <- p_o*sum(sapply(1:n, function(i) {
+    tests <- p_o[i]*sum(sapply(1:n, function(i) {
       r_a[i]*y[map("h_u", i)]
     }))
       
@@ -174,8 +174,8 @@ generate.params <- function(config, i, scenario, disc_rate = 0.03)
   params       <- list(n=n)
   
   params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
-  params$p_o   <- if(scenario == "none") 0.0 else unname(risks[n*4+1]) # Just uses first one
-  params$p_r   <- if(scenario == "none") 0.0 else unname(risks[n*5+1]) # Juse uses first one
+  params$p_o   <- if(scenario == "none") 0.0 else unname(risks[1:n + n*4])
+  params$p_r   <- if(scenario == "none") 0.0 else unname(risks[1:n + n*5])
   params$p_bd  <- unname(risks[1:n + n*2]) # Probability of death as direct result of B
   params$p_g   <- unname(risks[1:n + n*3]) # Probability of genetic variant
   params$r_a   <- unname(inst_rate(risks[1:n + n*6], risks[1:n])) # Rate of a
