@@ -1,7 +1,7 @@
 set.seed(23)
 
 # Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
-scenarios <- read.csv("./simple-pgx-scenario-parameters-psa-behavior.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
+scenarios <- read.csv("./simple-pgx-scenario-parameters-psa-behavior-test.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
 #run.psa <- FALSE
 #if (!(run.psa)) scenarios$psatype = "constant"
 scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()

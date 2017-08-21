@@ -35,8 +35,8 @@ paste("initialize_patient <- function(traj, inputs)
       set_attribute(\"aAge\", function(attrs) attrs[['aAgeInitial']]) %>% 
       set_attribute(\"aGender\", function() inputs$vGender) %>% 
       set_attribute(\"aPSA_ID\",function() sample(seq(inputs$vN_PSA),1)) %>% 
-      set_attribute(\"aControlOrder\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]]))) %>%
-      set_attribute(\"aControlRead\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]]))) %>% 
+      #set_attribute(\"aControlOrder\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]]))) %>%
+      #set_attribute(\"aControlRead\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]]))) %>% 
       ") %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGene_",.x,"\", function(attrs) sample(1:2,1,prob=c(inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]],1-inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]])))"," %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGenotyped_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
@@ -45,8 +45,12 @@ scenario.ids %>% purrr::map(~paste("  set_attribute(\"eventB_",.x,"\",0) %>% \n"
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aTreat_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aDrug_",.x,"\",1) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aOrdered_test_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
-scenario.ids %>% purrr::map(~paste("  set_attribute(\"aControlOrder_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
-scenario.ids %>% purrr::map(~paste("  set_attribute(\"aControlRead_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
+scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
+                                  paste("  set_attribute(\"aControlOrder_",.x,"\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]]))) %>% \n",sep=""))
+                            ) %>% unlist() %>% cat()
+scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
+                                  paste("  set_attribute(\"aControlRead_",.x,"\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]]))) %>% \n",sep="")) 
+                            ) %>% unlist() %>% cat()
 paste("  set_attribute(\"last\" , 1)\n}") %>% cat()
 sink()
 source("./temp/TEMP-initialize-patient-attributes.R")
