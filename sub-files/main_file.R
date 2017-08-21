@@ -35,8 +35,8 @@ paste("initialize_patient <- function(traj, inputs)
       set_attribute(\"aAge\", function(attrs) attrs[['aAgeInitial']]) %>% 
       set_attribute(\"aGender\", function() inputs$vGender) %>% 
       set_attribute(\"aPSA_ID\",function() sample(seq(inputs$vN_PSA),1)) %>% 
-      set_attribute(\"aControlOrder\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]]))) %>%
-      set_attribute(\"aControlRead\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]]))) %>% 
+      #set_attribute(\"aControlOrder\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder[attrs[[\'aPSA_ID\']]]))) %>%
+      #set_attribute(\"aControlRead\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead[attrs[[\'aPSA_ID\']]]))) %>% 
       ") %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGene_",.x,"\", function(attrs) sample(1:2,1,prob=c(inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]],1-inputs$vGene_",.x,"[attrs[[\'aPSA_ID\']]])))"," %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aGenotyped_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
@@ -45,8 +45,12 @@ scenario.ids %>% purrr::map(~paste("  set_attribute(\"eventB_",.x,"\",0) %>% \n"
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aTreat_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aDrug_",.x,"\",1) %>% \n",sep="")) %>% unlist() %>% cat()
 scenario.ids %>% purrr::map(~paste("  set_attribute(\"aOrdered_test_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
-scenario.ids %>% purrr::map(~paste("  set_attribute(\"aControlOrder_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
-scenario.ids %>% purrr::map(~paste("  set_attribute(\"aControlRead_",.x,"\",0) %>% \n",sep="")) %>% unlist() %>% cat()
+scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
+                                  paste("  set_attribute(\"aControlOrder_",.x,"\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityOrder_TK[attrs[[\'aPSA_ID\']]]))) %>% \n",sep=""))
+                            ) %>% unlist() %>% cat()
+scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
+                                  paste("  set_attribute(\"aControlRead_",.x,"\",function(attrs) sample(0:1,1,prob=c(1-inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]],inputs$vProbabilityRead_TK[attrs[[\'aPSA_ID\']]]))) %>% \n",sep="")) 
+                            ) %>% unlist() %>% cat()
 paste("  set_attribute(\"last\" , 1)\n}") %>% cat()
 sink()
 source("./temp/TEMP-initialize-patient-attributes.R")
@@ -170,8 +174,8 @@ source("./temp/TEMP-create-event-registry.R")
 
 
 #### Counters
-counters.scenarios <- scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),paste0(c("A_TK","A_c_TK","B_TK","B_Survive_TK","B_Death_TK","treat_TK","rx_TK","alt_TK","single_test_TK")))) %>% unlist()
-counters <- c("time_in_model","secular_death",counters.scenarios,"panel_test")
+counters.scenarios <- scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),paste0(c("A_TK","A_c_TK","B_TK","B_Survive_TK","B_Death_TK","treat_TK","rx_TK","alt_TK")))) %>% unlist()
+counters <- c("time_in_model","secular_death",counters.scenarios,"panel_test","single_test")
 
 
 source('./sub-files/event_main_loop_simple.R')
@@ -244,7 +248,8 @@ exec.simulation <- function(inputs)
   
   cost.as.list <- setNames(split(t(drawn.parameter.values[["cost"]]), seq(nrow(t(drawn.parameter.values[["cost"]])))), colnames(drawn.parameter.values[["cost"]]))
   costs = append(list(
-    panel_test=250
+    panel_test=drawn.parameter.values$global$panel_test,
+    single_test = drawn.parameter.values$global$single_test
   ),cost.as.list)
   
   inputs <- append(append(inputs.init,inputs.main),list(disutilities=disutilities,durations=durations,type=type,costs=costs))

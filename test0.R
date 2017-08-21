@@ -1,3 +1,3 @@
 #setwd("./rise-simulation")
-source("./run.R")
+source("./batch_run.R")
 print(summary)

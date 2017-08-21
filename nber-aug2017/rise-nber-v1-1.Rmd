@@ -32,137 +32,25 @@ This notebook tracks progress running the discrete event simulation for the NBER
   
 The simulation is set up such that it can be scaled to K scenarios with varying parameters for all the above.
 
-# Model Set Up
 
-We first initialize the code and global run parameters.
-```{r,warning=FALSE,message=FALSE}
-rm(list=ls())
-run.model = TRUE
-options("scipen"=100, "digits"=4)
+```{r}
 setwd("../")
+rm(list=ls())
+run.id <- "behavioral-global"
+#can modify here
 inputs.init <- list(
-  vHorizon = 10,
-  vN = 1000000,
+  vHorizon = 80,
+  vN = 1500000,
   vAge= 40,
-  vN_PSA = 100
+  vN_PSA = 200
 )
-
 source("./sub-files/main_file.R")
 source("./sub-files/costs_simple.R")
-
-## Look at summary statistics
-results <- NULL
-attributes <- NULL
-
-```
-# Run the model
-
- 
-```{r,cache=TRUE,message=FALSE,warning=FALSE}
-setwd("../")
-
-if (run.model)
-{
-
-  for (preemptive in c("None", "Panel"))
-  {
-    #for(reactive in c("None","Single","Panel"))
-    for (reactive in c("None", "Single","Panel"))
-    {
-      if (preemptive == "PREDICT" && reactive == "Panel") {
-        next
-      }
-      if (preemptive == "PREDICT" && reactive == "Single") {
-        next
-      }
-      if (preemptive == "Panel" && reactive == "Single") {
-        next
-      }
-      if (preemptive == "Panel" && reactive == "Panel") {
-        next
-      }
-      #if(preemptive == "None" && reactive == "None") {next}
-      inputs.init$vPreemptive <- preemptive
-      inputs.init$vReactive   <- reactive
-      cat("Running ", preemptive, "-", reactive, "\n")
-      run <- exec.simulation(inputs.init)
-      run$preemptive <- preemptive
-      run$reactive <- reactive
-      at <- arrange(get_mon_attributes(env), name, key, time)
-      at$preemptive <- preemptive
-      at$reactive <- reactive
-      
-      psa_id <-
-        at %>% filter(key == "aPSA_ID") %>% select(name, aPSA_ID = value)
-      run <- run %>% left_join(psa_id, "name")
-      
-      if (is.null(results)) {
-        results <- run
-      } else  {
-        results <- rbind(results, run)
-      }
-      if (is.null(attributes)) {
-        attributes <- at
-      } else  {
-        attributes <- rbind(attributes, at)
-      }
-    }
-  }
-  source("./sub-files/set-inputs.R")
-  save(drawn.parameter.values, file = "./run-data/drawn-parameter-values-toy.Rdata")
-  save(at, file = "./run-data/attributes-toy.Rdata")
-  save(inputs, file = "./run-data/inputs-toy.Rdata")
-  save(results, file = "./run-data/result-toy.Rdata")
-}
-
-load("./run-data/drawn-parameter-values-toy.Rdata")
-#load("./run-data/attributes-toy.Rdata")
-load("./run-data/inputs-toy.Rdata")
-load("./run-data/result-toy.Rdata")
-
-DT <- results %>% arrange(aPSA_ID, name, start_time, end_time) %>% data.table()
-# Map the scenario names to the IDS
-foo <- DT$resource
-for (x in names(scenario.names))
-  foo <-
-  gsub(paste0("SC_", x), paste0("SC_", scenario.names[x]), foo)
-DT$resource_mapped = foo
-
-summary <- DT[, .N, by = list(aPSA_ID, resource_mapped, preemptive, reactive)]
-
+load(paste0("./run-data/overall-summary-",run.id,".Rdata"))
+load(paste0("./run-data/simulation-results-",run.id,".Rdata"))
+load(paste0("./run-data/drawn-parameter-values-",run.id,".Rdata"))
 ```
 
-# Get Summary Information
-```{r,warning=FALSE,message=FALSE}
-library(DT)
-summary %>% mutate(temp = resource_mapped) %>% 
-  separate(resource_mapped,into = c("resource","scenario"),sep="_SC_") %>% 
-  mutate(scenario = ifelse(is.na(scenario),"global",scenario)) %>% select(aPSA_ID,preemptive,reactive,scenario,resource,N) %>% 
-  reshape2::dcast(aPSA_ID+preemptive+reactive+resource~scenario,value.var="N") %>% 
-  select(aPSA_ID,preemptive,reactive,resource,global, everything()) %>% 
-  unite(strategy,preemptive,reactive,sep="-") %>% group_by(strategy,resource) %>% 
-  summarise_at(.vars = c("global",as.character(scenario.names)),.funs=function(x) round(mean(x,na.rm=TRUE),1)) %>% arrange(resource,strategy,global) -> summary.dt
-summary.dt %>% datatable(options = list(pageLength = 50),filter = 'top') 
-```
-
-# Estimate QALY and Costs
-```{r}
-source("../sub-files/costs_simple.R")
-if (run.model) 
-{
-  s1 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>%
-    rename(dQALY_None = dQALY , dCOST_None = dCOST) 
-  s2 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="Panel"& reactive=="None" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% 
-    rename(dQALY_Panel_None = dQALY , dCOST_Panel_None = dCOST) 
-  s3 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Panel" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Panel = dQALY , dCOST_None_Panel = dCOST) 
-  s4 <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results,preemptive=="None"& reactive=="Single" & aPSA_ID==.x),inputs=inputs,psa_id=.x)) %>% rename(dQALY_None_Single = dQALY , dCOST_None_Single = dCOST) 
-  
-  Sim <- cbind(s1,s2,s3,s4,drawn.parameter.values$global)
-} else {
-  save(Sim,file="../run-data/simulation-results.Rdata")
-}
-
-```
 
 ```{r}
 setwd("../")
@@ -242,7 +130,7 @@ Sim.long<- melt(Sim, id.vars=c("Iteration",grep("Probability",Names,value=TRUE))
 ```
 
 ```{r,fig.cap="One Way Sensitivity Analysis"}
-parm<-'vProbabilityRead'
+parm<-'vProbabilityOrder'
 range<-c(0,1)
 OneWaySA(Strategies,Parms,NHB,parm) 
 ```
