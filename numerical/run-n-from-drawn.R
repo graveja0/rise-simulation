@@ -1,11 +1,11 @@
-setwd("numerical")
+#setwd("numerical")
 
 load("drawn-parameter-values-behavioral-global.Rdata")
 
 source("model-n-simple.R")
 
 config   <- drawn.parameter.values
-times    <- seq(0, 40, by=1/365)
+times    <- seq(0, 80, by=2/365)
 scenario <- "none"
 
 m <- model.run(config, 1, "none")

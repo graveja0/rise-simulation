@@ -109,9 +109,11 @@ costs <- function(solution, params)
   step     <- solution[2,'time'] - solution[1,'time']
   
   with(as.list(params), {
-    disc  <- length(key) * n + 3
+    disc  <- length(key) * n + 3 # Discount Rate
+    tests <- disc - 1
 
-    cost <- c_t*sum(diff(solution[,disc-1])*solution[2:k,disc]) # Testing costs
+    # Testing costs
+    cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
     b_d  <- 0
     for(i in 1:n)
     {
