@@ -9,13 +9,13 @@
 
 
 rm(list=ls())
-run.id <- "behavioral-global"
+run.id <- "behavioral-global-debug"
 #can modify here
 inputs.init <- list(
   vHorizon = 80,
-  vN = 150,
+  vN = 15000,
   vAge= 40,
-  vN_PSA = 2
+  vN_PSA = 20
 )
 
 source("./sub-files/main_file.R")

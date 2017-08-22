@@ -311,12 +311,12 @@ TornadoAll <-function(Strategies,Parms,Outcomes){
   txtsize <- 12
   d=data.frame(x1=x2Rect, x2=x1Rect, y1=ylevel-0.4, y2=ylevel+0.4, t=colRect, r = ylevel)
   ggplot(d, aes(xmin = x1, xmax = x2, ymin = y1, ymax = y2, fill = t)) +
-    ggtitle("Torando Diagram") + 
+    ggtitle("Tornado Diagram") + 
     xlab("Expected NHB") +
     ylab("Parameters") + 
     geom_rect()+
     theme_bw() + 
-    scale_y_continuous(limits = c(0.5, nParams + 0.5),breaks=seq(1:8), labels=paramNames2[rankY]) +
+    scale_y_continuous(limits = c(0.5, nParams + 0.5),breaks=seq(1:ncol(Parms)), labels=paramNames2[rankY]) +
     #scale_y_discrete(breaks=seq(1:8), labels=paramNames2[rankY]) + 
     scale_fill_discrete(name="Optimal\nStrategy",
                         #breaks=c("ctrl", "trt1", "trt2"),
@@ -335,12 +335,12 @@ TornadoAll <-function(Strategies,Parms,Outcomes){
 
 PlaneCE<-function(Strategies,Outcomes){
   ndep<-length(Strategies)*2 #Determine number of outcomes for all starteges, i.e., cost and effectiveness
-  ind_c<-seq(1,(ndep-1),by=2) #Index to extract the costs from matrix Outcomes
-  ind_e<-seq(2,ndep,by=2) #Index to extract the effectiveness from matrix Outcomes
-  Cost<-melt(Outcomes[,ind_c],variable_name="Strategy")
-  levels(Cost$Strategy)<-Strategies
-  Eff<-melt(Outcomes[,ind_e],variable_name="Strategy")
-  levels(Eff$Strategy)<-Strategies
+  ind_c<- grep("COST",colnames(Outcomes)) #seq(1,(ndep-1),by=2) #Index to extract the costs from matrix Outcomes
+  ind_e<-grep("QALY",colnames(Outcomes)) #seq(2,ndep,by=2) #Index to extract the effectiveness from matrix Outcomes
+  Cost<-reshape2::melt(Outcomes[,ind_c],variable_name="Strategy") %>% rename(Strategy=variable)
+  levels(Cost$Strategy)<- gsub("dCOST_","",levels(Cost$Strategy))
+  Eff<-reshape2::melt(Outcomes[,ind_e])   %>% rename(Strategy=variable)
+  levels(Eff$Strategy)<- gsub("dQALY_","",levels(Eff$Strategy))
   CE<-cbind(Cost,Eff[,2])
   colnames(CE)<-c("Strategy","Cost","Effectiveness")
   
@@ -373,12 +373,12 @@ PlaneCE<-function(Strategies,Outcomes){
 
 ScatterCE<-function(Strategies,Outcomes){
   ndep<-length(Strategies)*2 #Determine number of outcomes for all starteges, i.e., cost and effectiveness
-  ind_c<-seq(1,(ndep-1),by=2) #Index to extract the costs from matrix Outcomes
-  ind_e<-seq(2,ndep,by=2) #Index to extract the effectiveness from matrix Outcomes
-  Cost<-melt(Outcomes[,ind_c],variable_name="Strategy")
-  levels(Cost$Strategy)<-Strategies
-  Eff<-melt(Outcomes[,ind_e],variable_name="Strategy")
-  levels(Eff$Strategy)<-Strategies
+  ind_c<- grep("COST",colnames(Outcomes)) #seq(1,(ndep-1),by=2) #Index to extract the costs from matrix Outcomes
+  ind_e<-grep("QALY",colnames(Outcomes)) #seq(2,ndep,by=2) #Index to extract the effectiveness from matrix Outcomes
+  Cost<-reshape2::melt(Outcomes[,ind_c],variable_name="Strategy") %>% rename(Strategy=variable)
+  levels(Cost$Strategy)<- gsub("dCOST_","",levels(Cost$Strategy))
+  Eff<-reshape2::melt(Outcomes[,ind_e])   %>% rename(Strategy=variable)
+  levels(Eff$Strategy)<- gsub("dQALY_","",levels(Eff$Strategy))
   CE<-cbind(Cost,Eff[,2])
   colnames(CE)<-c("Strategy","Cost","Effectiveness")
   
@@ -402,7 +402,7 @@ ScatterCE<-function(Strategies,Outcomes){
   ggplot(CE, aes(x=Effectiveness, y=Cost, color=Strategy)) + 
     geom_point(size=0.7) +
     geom_point(data = Means,aes(x = Eff.mean, y = Cost.mean, shape=Strategy),size=8,fill="white") +
-    geom_text(data = Means,aes(x = Eff.mean, y = Cost.mean, label=c(1,2,3)),size=5,colour="gray",alpha=1) +
+    geom_text(data = Means,aes(x = Eff.mean, y = Cost.mean, label=c(seq(nrow(Means)))),size=5,colour="gray",alpha=1) +
     geom_path(data=df_ell, aes(x=x, y=y,colour=group), size=1, linetype=2, alpha=1) + # draw ellipse lines
     ggtitle("Cost-Effectiveness Scatterplot") +
     scale_colour_discrete(l=50) +  # Use a slightly darker palette than normal
