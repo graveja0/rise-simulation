@@ -168,7 +168,7 @@ costs <- function(solution, params)
 # Defined scenarios
 scenarios <- c("none", "reactive-single", "reactive-panel", "preemptive-panel")
 
-generate.params <- function(config, i, scenario, disc_rate = 0.03)
+generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
 {
   risks        <- unlist(config$risk[i,])
   disutilities <- unlist(config$disutility[i,])
@@ -228,7 +228,7 @@ generate.initial <- function(scenario, params)
 # i is the point to use from the cube
 # scenario specifies scenario
 # times is the time points to solve (resolution)
-model.run <- function(config, i, scenario, times=seq(0, 40, by=1/365))
+model.run <- function(config, i, scenario, times=seq(0, 80, by=2/365))
 {
   params  <- generate.params(config, i, scenario)
   init    <- generate.initial(scenario, params)
