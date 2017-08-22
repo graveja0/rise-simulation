@@ -1,5 +1,5 @@
 rm(list=ls())
-
+save.results = FALSE
 run.id.base <- "vogi"
 Scenarios <- list (c("None","None"),c("None","Single"))
 
@@ -26,12 +26,12 @@ for (ss in Scenarios)
   #can modify here
   inputs.init <- list(
     vHorizon = 80,
-    vN = 500000,
+    vN = 10000,
     vAge= 40,
-    vN_PSA = 10
+    vN_PSA = 2
   )
  
-  source("./sub-files/main_file.R"); drawn.parameter.values$global[1:4,3:4]
+  source("./sub-files/main_file.R"); 
   source("./sub-files/costs_simple.R")
   source("./sub-files/set-inputs.R")
   
@@ -43,6 +43,7 @@ for (ss in Scenarios)
   inputs.init$vPreemptive <- preemptive
   inputs.init$vReactive   <- reactive
   cat("Running ", preemptive,"-", reactive,"-",batch,"\n")
+  if (!save.results) cat("NOTE: NOT SAVING RESULTS\n")
   run <- exec.simulation(inputs.init)
   run$preemptive <- preemptive
   run$reactive <- reactive
@@ -59,7 +60,7 @@ for (ss in Scenarios)
   
   
   source("./sub-files/set-inputs.R")
-  save(drawn.parameter.values, file = file.path(mainDir, subDir,paste0("parameter-values-",run.id,"-",preemptive,"-",reactive,".RData")))
+  if (save.results) save(drawn.parameter.values, file = file.path(mainDir, subDir,paste0("parameter-values-",run.id,"-",preemptive,"-",reactive,".RData")))
   
   # DT <- results %>% arrange(aPSA_ID,name,start_time,end_time) %>% data.table()
   # summary <- DT[, .N, by = list(aPSA_ID,resource,preemptive,reactive)]
@@ -71,7 +72,8 @@ for (ss in Scenarios)
   ce.results.overall <- cost.qaly(results,inputs) %>% mutate(strategy="None")
   ce.results.psa <- seq(inputs$vN_PSA) %>% purrr::map_df(~cost.qaly(subset(results, aPSA_ID==.x),inputs=inputs,psa_id=.x)) 
   ce.results <- list(overall=ce.results.overall,psa=ce.results.psa)
-  save(ce.results,file=file.path(mainDir, subDir,paste0("ce-results-",run.id,"-",preemptive,"-",reactive,".RData")))
+  if (save.results) save(ce.results,file=file.path(mainDir, subDir,paste0("ce-results-",run.id,"-",preemptive,"-",reactive,".RData")))
+  
   }
 }
 
