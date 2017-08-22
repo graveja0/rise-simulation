@@ -112,6 +112,7 @@ costs <- function(solution, params)
     disc  <- length(key) * n + 3
 
     cost <- c_t*sum(diff(solution[,disc-1])*solution[2:k,disc]) # Testing costs
+    b_d  <- 0
     for(i in 1:n)
     {
       # Compute Discounted Cost
@@ -123,15 +124,17 @@ costs <- function(solution, params)
               c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
               c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
               c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
+      
+      b_d  <- b_d + solution[k,maps('b_d', i)]
     }
     
     # Total living in model
-    life <- solution[,maps('h_u',i)] +
-            solution[,maps('h_t',i)] +
-            solution[,maps('a_p',i)] +
-            solution[,maps('a_a',i)] +
-            solution[,maps('b_p',i)] + 
-            solution[,maps('b_a',i)] 
+    life <- solution[,maps('h_u',1)] +
+            solution[,maps('h_t',1)] +
+            solution[,maps('a_p',1)] +
+            solution[,maps('a_a',1)] +
+            solution[,maps('b_p',1)] + 
+            solution[,maps('b_a',1)] 
 
     # Total possible life units is integral of discounted time
     pQALY <- sum(simpson*life*solution[,disc])*step
@@ -149,12 +152,13 @@ costs <- function(solution, params)
               d_b[i]*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step 
     }
 
-    c(cost       = unname(cost),
-      qaly       = unname(pQALY-disA-disB),
-      possible   = unname(pQALY),
-      disutil_a  = unname(disA),
-      disutil_b  = unname(disB),
-      living     = unname(life[k])
+    c(dCOST       = unname(cost),
+      dQALY       = unname(pQALY-disA-disB),
+      possible    = unname(pQALY),
+     # disutil_a  = unname(disA),
+     # disutil_b  = unname(disB),
+      fatal_b     = unname(b_d),
+      living      = unname(life[k])
       )
   })
 }
@@ -174,8 +178,8 @@ generate.params <- function(config, i, scenario, disc_rate = 0.03)
   params       <- list(n=n)
   
   params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
-  params$p_o   <- if(scenario == "none") 0.0 else unname(risks[1:n + n*4])
-  params$p_r   <- if(scenario == "none") 0.0 else unname(risks[1:n + n*5])
+  params$p_o   <- if(scenario == "none") rep(0.0, n) else unname(risks[1:n + n*4])
+  params$p_r   <- if(scenario == "none") rep(0.0, n) else unname(risks[1:n + n*5])
   params$p_bd  <- unname(risks[1:n + n*2]) # Probability of death as direct result of B
   params$p_g   <- unname(risks[1:n + n*3]) # Probability of genetic variant
   params$r_a   <- unname(inst_rate(risks[1:n + n*6], risks[1:n])) # Rate of a
@@ -189,8 +193,9 @@ generate.params <- function(config, i, scenario, disc_rate = 0.03)
   params$c_tx  <- unname(costs[1:n + n*4]) # Cost of Treatment (Daily)
   params$c_alt <- unname(costs[1:n + n])   # Cost of alternate treatment (Daily)
   
-  params$c_t   <- unname(costs[n*5 + 1])   # Cost of a test (Only uses first value)
-  
+  params$c_t   <- if(scenario %in% c("reactive-panel", "preemptive-panel"))
+                  { config$global$panel_test } else { config$global$single_test }
+                  
   params$d_a   <- unname(disutilities[1:n])# Disutility of A
   params$d_at  <- unname(durations/365)    # Duration of A in years.
   params$d_b   <- unname(disutilities[1:n+2*n]) # Disutility of B
@@ -225,6 +230,7 @@ model.run <- function(config, i, scenario, times=seq(0, 40, by=1/365))
 {
   params  <- generate.params(config, i, scenario)
   init    <- generate.initial(scenario, params)
-  costs(dede(init, times, genModel, params), params)
+  x       <- dede(init, times, genModel, params)
+  costs(x, params)
 }
 

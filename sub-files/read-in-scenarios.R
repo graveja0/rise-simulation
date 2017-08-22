@@ -1,7 +1,8 @@
-set.seed(23)
+
 
 # Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
-scenarios <- read.csv("./simple-pgx-scenario-parameters-psa-behavior.csv",stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
+scenarios <- read.csv(scenario.file,stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
+
 #run.psa <- FALSE
 #if (!(run.psa)) scenarios$psatype = "constant"
 scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()
@@ -21,11 +22,13 @@ require(tidyverse)
 draw.latin.hypercube <- function(tt,PSA.N=10) {
   params.full <- scenarios %>% filter(type==tt) %>% select(-value,-description)
   names.temp <- names(params.full)
-  for (y in scenario.names) names.temp <- gsub(y,paste0("SC_",names(scenario.names[which(scenario.names==y)])),names.temp)
-  names(params.full) <- gsub("psa_param","psa",names.temp)
+  #for (y in scenario.names) names.temp <- gsub(paste0("^",y,"_"),paste0("SC_",names(scenario.names[which(scenario.names==y)])),names.temp)
+  for (y in scenario.names) names.temp <- gsub( paste0(paste0("^",y,"_"),"|",paste0("^",y,"$")),paste0("SC_",names(scenario.names[which(scenario.names==y)])),names.temp)
+  names(params.full) <- gsub("psa_param","_psa",names.temp)
   if (tt!="global")
   {
-    params.full %>% melt(id.vars = c("param","psatype","type")) %>% mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%
+    params.full %>% melt(id.vars = c("param","psatype","type")) %>% tbl_df() %>% 
+      mutate(paramtype = gsub(paste0(scenario.ids,collapse="|"),"",variable)) %>%
       mutate(variable = gsub("_psa1|_psa2","",variable) , paramtype = gsub("^_","",paramtype)) %>%
       mutate(paramtype = ifelse(paramtype=="","value",paramtype)) %>%
       mutate(paramtype = ifelse(psatype=="uniform",gsub("psa1","min",paramtype),paramtype)) %>%
