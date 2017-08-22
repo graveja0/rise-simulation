@@ -1,4 +1,5 @@
 rm(list=ls())
+
 run.id.base <- "vogi"
 Scenarios <- list (c("None","None"),c("None","Single"))
 
@@ -8,7 +9,6 @@ subDir <- run.id.base
 if (!file.exists(file.path(mainDir,subDir))){
   dir.create(file.path(mainDir, subDir))
 }
-
 
 for (ss in Scenarios)
 {

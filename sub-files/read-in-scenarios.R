@@ -2,6 +2,7 @@
 
 # Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
 scenarios <- read.csv(scenario.file,stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
+
 #run.psa <- FALSE
 #if (!(run.psa)) scenarios$psatype = "constant"
 scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()

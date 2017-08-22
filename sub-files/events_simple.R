@@ -33,8 +33,8 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
           continue=c(TRUE, TRUE),
           trajectory(\"not have\") %>%
           branch(
-          #function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
-          function(attrs) attrs[[\'aControlOrder\']]+1, #use probability of ordering test
+          function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
+          #function(attrs) attrs[[\'aControlOrder\']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory(\"not order\") %>% timeout(0),
           trajectory(\"order reactive test\") %>% set_attribute(\"aGenotyped_TK\", 1) %>% mark(\"single_test\") %>% set_attribute(\"aOrdered_test_TK\", 1)
@@ -49,8 +49,8 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
           continue=c(TRUE, TRUE),
           trajectory(\"not panel tested\") %>%
           branch(
-          #function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
-          function(attrs) attrs[[\'aControlOrder\']]+1, #use probability of ordering test
+          function(attrs) attrs[[\'aControlOrder_TK\']]+1, #use probability of ordering test
+          #function(attrs) attrs[[\'aControlOrder\']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory(\"not order\") %>% timeout(0),
           trajectory(\"order reactive test\") %>% panel_test() %>% set_attribute(\"aOrdered_test_TK\", 1)
@@ -67,8 +67,8 @@ scenario.ids %>% purrr::map(~gsub("_TK",paste0("_",.x),
   traj %>%
     set_attribute(\"aDrug_TK\", function(attrs)
       if(attrs[[\"aGene_TK\"]]==1 & attrs[[\"aGenotyped_TK\"]]==1 &
-                 #(attrs[[\'aOrdered_test_TK\']] == 1 | attrs[[\'aControlRead_TK\']]==1))
-                  (attrs[[\'aOrdered_test_TK\']] == 1 | attrs[[\'aControlRead\']]==1))
+                 (attrs[[\'aOrdered_test_TK\']] == 1 | attrs[[\'aControlRead_TK\']]==1))
+                  #(attrs[[\'aOrdered_test_TK\']] == 1 | attrs[[\'aControlRead\']]==1))
                  {return(2)} else {return(1)}) %>%
                  set_attribute(\"aTreat_TK\",1) %>%
                  branch(
