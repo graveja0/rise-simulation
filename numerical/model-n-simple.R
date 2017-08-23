@@ -109,9 +109,11 @@ costs <- function(solution, params)
   step     <- solution[2,'time'] - solution[1,'time']
   
   with(as.list(params), {
-    disc  <- length(key) * n + 3
+    disc  <- length(key) * n + 3 # Discount Rate
+    tests <- disc - 1
 
-    cost <- c_t*sum(diff(solution[,disc-1])*solution[2:k,disc]) # Testing costs
+    # Testing costs
+    cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
     b_d  <- 0
     for(i in 1:n)
     {
@@ -166,7 +168,7 @@ costs <- function(solution, params)
 # Defined scenarios
 scenarios <- c("none", "reactive-single", "reactive-panel", "preemptive-panel")
 
-generate.params <- function(config, i, scenario, disc_rate = 0.03)
+generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
 {
   risks        <- unlist(config$risk[i,])
   disutilities <- unlist(config$disutility[i,])
@@ -226,7 +228,7 @@ generate.initial <- function(scenario, params)
 # i is the point to use from the cube
 # scenario specifies scenario
 # times is the time points to solve (resolution)
-model.run <- function(config, i, scenario, times=seq(0, 40, by=1/365))
+model.run <- function(config, i, scenario, times=seq(0, 80, by=2/365))
 {
   params  <- generate.params(config, i, scenario)
   init    <- generate.initial(scenario, params)
