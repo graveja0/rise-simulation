@@ -40,39 +40,74 @@ require(simmer)
 require(dplyr)
 require(tidyverse)
 library(ellipse) 
-run.id <- "vogi"
+contains <- dplyr::contains
+run.id.base <- "vogi-debug"
 Strategies <- c("None-None","None-Single")
 Strategies2 <- gsub("-",".",Strategies)
 getwd()
+
+mainDir <- "./run-data"
+subDir <- run.id.base
+
+
 for (s in Strategies) {
-  temp <- unlist(strsplit(s,"-")) 
-  load(file.path("./run-data/",paste0("ce-results-",run.id,"-",temp[1],"-",temp[2],".RData")))
-  load(file.path("./run-data/",paste0("parameter-values-",run.id,"-",temp[1],"-",temp[2],".RData")))
-  ce.results[[2]] <- cbind(ce.results[[2]],do.call("cbind",drawn.parameter.values)) 
-  ce.results.overall <- ce.results[[1]]
-  ce.results <- ce.results[[2]] %>% data.frame()
-  #colnames(ce.results)[1:2] <- paste0(colnames(ce.results)[1:2],gsub("-",".",s))
-  ce.results <- ce.results %>% mutate(strategy=s) %>% mutate(psa_id = row_number())
-  assign(paste0("ce.results.",gsub("-",".",s)),ce.results)
-  assign(paste0("ce.results.overall.",gsub("-",".",s)),ce.results.overall)
+  ce.files <-
+    grep("ce-results", grep(s, list.files(file.path(mainDir, subDir)), value =
+                              TRUE), value = TRUE)
+  cat(ce.files)
+  load.ce.result <- function(x)
+  {
+    parameter.file <- gsub("ce-results", "parameter-values", x)
+    load(file.path(mainDir, subDir, x))
+    load(file.path(mainDir, subDir, parameter.file))
+    temp <-
+      ce.results[[2]] %>% tbl_df() %>% cbind(drawn.parameter.values)
+    varying1 <-
+      suppressWarnings(temp %>% map_dbl( ~ var(., na.rm = TRUE)))
+    varying <- names(varying1[which(varying1 > 0)])
+    temp <-
+      temp[, varying] %>% data.frame() %>% dplyr::mutate(file = x, iteration =
+                                                           row_number())  %>%
+      dplyr::select(
+        file,
+        iteration,
+        dplyr::contains("QALY"),
+        dplyr::contains("COST"),
+        everything()
+      )
+    temp
+  }
+  ce.results <-
+    ce.files %>% map_df( ~ load.ce.result(.x)) %>% mutate(psa_id = row_number()) %>%
+    mutate(strategy = s)
+  assign(paste0("ce.results.", gsub("-", ".", s)), ce.results)
 }
 
 i = 1
 for (i in seq(Strategies)) {
-  if (i==1) ce.results <- get(paste0("ce.results.",Strategies2[i])) else
+  if (i == 1)
+    ce.results <- get(paste0("ce.results.", Strategies2[i]))
+  else
   {
-    temp <- get(paste0("ce.results.",Strategies2[i]))
-    ce.results <- rbind.data.frame(ce.results,temp)
+    temp <- get(paste0("ce.results.", Strategies2[i]))
+    ce.results <- rbind.data.frame(ce.results, temp)
   }
-  i = i +1
+  i = i + 1
 }
 
-varying1 <- suppressWarnings(ce.results %>% map_dbl(~var(.,na.rm=TRUE)) )
-varying <- names(varying1[which(varying1>0)])
-ce.results <- ce.results %>% select_at(c("psa_id","strategy",varying) )  %>% mutate(strategy=gsub("-",".",strategy))
-id.vars <- c("psa_id","strategy",varying[-grep("psa_id|strategy|QALY|COST",varying)])
-wide.fmla <- as.formula(paste0(paste0(c("psa_id",varying[-grep("psa_id|strategy|QALY|COST",varying)]),collapse="+"),"~variable+strategy"))
-ce.results <- ce.results %>% reshape2::melt(id.vars=id.vars) %>% reshape2::dcast(wide.fmla)
+ce.results <-
+  ce.results %>% mutate(strategy = gsub("-", ".", strategy)) %>% select(-iteration, -file)
+varying1 <-
+  suppressWarnings(ce.results %>% map_dbl( ~ var(., na.rm = TRUE)))
+varying <- names(varying1[which(varying1 > 0)])
+id.vars <-
+  c("psa_id", "strategy", varying[-grep("psa_id|strategy|QALY|COST", varying)])
+wide.fmla <-
+  as.formula(paste0(paste0(c("psa_id", varying[-grep("psa_id|strategy|QALY|COST", varying)]), collapse =
+                             "+"), "~variable+strategy"))
+
+ce.results.blah <-
+  ce.results %>% reshape2::melt(id.vars = id.vars) %>% mutate(psa_id=as.character(psa_id)) %>% reshape2::dcast(wide.fmla)
 ```
 
 
@@ -93,7 +128,7 @@ Outcomes <- ce.results[, grep("psa_id|strategy|QALY|COST", colnames(ce.results))
 
 lambda <- 100000
 
-for (i in seq(length(Strategies))) ce.results[,paste0("NHB_",Strategies2[i])] <- ce.results %>% select(-contains("NHB")) %>% select_if(grepl(Strategies2[i],names(.))) %>% mutate_at(vars(contains("COST")),funs(-1*./lambda)) %>% mutate(NHB=rowSums(.)) %>% pull(NHB)
+for (i in seq(length(Strategies))) ce.results[,paste0("NHB_",Strategies2[i])] <- ce.results %>% select(-dplyr::contains("NHB")) %>% select_if(grepl(Strategies2[i],names(.))) %>% mutate_at(vars(contains("COST")),funs(-1*./lambda)) %>% mutate(NHB=rowSums(.)) %>% pull(NHB)
 
 for (i in seq(length(Strategies))) ce.results[,paste0("NMB_",Strategies2[i])] <- ce.results %>% select(-contains("NHB")) %>% select_if(grepl(Strategies2[i],names(.))) %>% mutate_at(vars(contains("COST")),funs(-1*.)) %>% mutate_at(vars(contains("QALY")),funs(lambda*.)) %>%  mutate(NMB=rowSums(.)) %>% pull(NMB)
 

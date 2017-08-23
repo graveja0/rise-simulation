@@ -1,7 +1,10 @@
 rm(list=ls())
-save.results = FALSE
-run.id.base <- "vogi"
-Scenarios <- list (c("None","None"),c("None","Single"))
+save.results = TRUE
+batch.parameters = TRUE
+Batches <- 2
+
+run.id.base <- "vogi-debug"
+Scenarios <- list (c("None","Single"),c("None","None"))
 
 mainDir <- "./run-data"
 subDir <- run.id.base
@@ -10,12 +13,12 @@ if (!file.exists(file.path(mainDir,subDir))){
   dir.create(file.path(mainDir, subDir))
 }
 
+# Assign Inputs
 for (ss in Scenarios)
 {
   set.seed(123) # Need the same parameters for each scenario 
-  for (batch in 1:2) 
+  for (batch in seq(Batches)) 
   {
-    
   run.id <- paste0(run.id.base,"-",batch)
   scenario = c(ss[1],ss[2])
   scenario.file ="./simple-pgx-scenario-parameters-vogi.csv"
@@ -26,15 +29,37 @@ for (ss in Scenarios)
   #can modify here
   inputs.init <- list(
     vHorizon = 80,
-    vN = 10000,
+    vN = 500,
     vAge= 40,
     vN_PSA = 2
   )
  
+  source("./sub-files/read-in-scenarios.R")
+  source("./sub-files/set-inputs.R")
+  assign(paste0("inputs",paste0(ss,collapse="."),batch),inputs)
+  assign(paste0("drawn.parameter.values",paste0(ss,collapse="."),batch),drawn.parameter.values)
+  }
+}
+
+for (ss in Scenarios)
+{
+  set.seed(123) # Need the same parameters for each scenario 
+  for (batch in seq(Batches)) 
+  {
+    run.id <- paste0(run.id.base, "-", batch)
+    scenario = c(ss[1], ss[2])
+    
+    
+    preemptive = scenario[1]
+    reactive = scenario[2]
+    
+  inputs <- get(paste0("inputs",paste0(ss,collapse="."),batch))
+  drawn.parameter.values <- get(paste0("drawn.parameter.values",paste0(ss,collapse="."),batch))
+  
   source("./sub-files/main_file.R"); 
   source("./sub-files/costs_simple.R")
-  source("./sub-files/set-inputs.R")
-  
+  cat(inputs$vProbabilityOrder_SC_A)
+  cat("\n\n")
   ## Look at summary statistics
   results <- NULL
   attributes <- NULL
@@ -58,8 +83,7 @@ for (ss in Scenarios)
   #save(results,file=file.path("./run-data/",paste0("results-",run.id,"-",preemptive,"-",reactive,".RData")))
   #save(attributes,file=file.path("./run-data/",paste0("attributes-",run.id,"-",preemptive,"-",reactive,".RData")))
   
-  
-  source("./sub-files/set-inputs.R")
+
   if (save.results) save(drawn.parameter.values, file = file.path(mainDir, subDir,paste0("parameter-values-",run.id,"-",preemptive,"-",reactive,".RData")))
   
   # DT <- results %>% arrange(aPSA_ID,name,start_time,end_time) %>% data.table()
