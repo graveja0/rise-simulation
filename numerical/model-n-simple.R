@@ -176,31 +176,33 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
   costs        <- unlist(config$cost[i,])
   
   # Start building the params list with the length
-  n            <- length(risks)/9
+  n            <- length(unique(gsub(".*_SC_","",names(risks[grep("_SC_",names(risks))]))))
   params       <- list(n=n)
   
+  getval <- function(x,tt) unname(tt[grep(x,names(tt))])
+  
   params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
-  params$p_o   <- if(scenario == "none") rep(0.0, n) else unname(risks[1:n + n*4])
-  params$p_r   <- if(scenario == "none") rep(0.0, n) else unname(risks[1:n + n*5])
-  params$p_bd  <- unname(risks[1:n + n*2]) # Probability of death as direct result of B
-  params$p_g   <- unname(risks[1:n + n*3]) # Probability of genetic variant
-  params$r_a   <- unname(inst_rate(risks[1:n + n*6], risks[1:n])) # Rate of a
-  params$r_b   <- unname(inst_rate(risks[1:n + n*7], risks[1:n+n])) # Rate of b
-  params$rr_b  <- unname(risks[1:n + n*8]) # Relative Risk of B when on alt treatment
+  params$p_o   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityOrder",risks)
+  params$p_r   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityRead",risks)
+  params$p_bd  <- getval("vFatalB_",risks) # Probability of death as direct result of B
+  params$p_g   <- getval("vGene_",risks) # Probability of genetic variant
+  params$r_a   <- unname(inst_rate(getval("vRiskA_",risks), getval("vDurationA_",risks))) # Rate of a
+  params$r_b   <- unname(inst_rate(getval("vRiskB_",risks), getval("vDurationB_",risks))) # Rate of b
+  params$rr_b  <- getval("vRR_B_",risks) # Relative Risk of B when on alt treatment
 
   # Costs
-  params$c_a   <- unname(costs[1:n])       # Cost of Event A
-  params$c_bs  <- unname(costs[1:n + n*3]) # Cost of Surviving Event B
-  params$c_bd  <- unname(costs[1:n + n*2]) # Cost of Death from Event B
-  params$c_tx  <- unname(costs[1:n + n*4]) # Cost of Treatment (Daily)
-  params$c_alt <- unname(costs[1:n + n])   # Cost of alternate treatment (Daily)
+  params$c_a   <- getval("A_c_",costs)       # Cost of Event A
+  params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event B
+  params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event B
+  params$c_tx  <- getval("rx_",costs)   # Cost of Treatment (Daily)
+  params$c_alt <- getval("alt_",costs)    # Cost of alternate treatment (Daily)
   
   params$c_t   <- if(scenario %in% c("reactive-panel", "preemptive-panel"))
                   { config$global$panel_test } else { config$global$single_test }
                   
-  params$d_a   <- unname(disutilities[1:n])# Disutility of A
-  params$d_at  <- unname(durations/365)    # Duration of A in years.
-  params$d_b   <- unname(disutilities[1:n+2*n]) # Disutility of B
+  params$d_a   <- getval("A_",disutilities) # Disutility of A
+  params$d_at  <- getval("A_",durations)/365    # Duration of A in years.
+  params$d_b   <- getval("B_Survive_",disutilities) # Disutility of B
   
   params$disc_rate <- disc_rate       # For computing discount
 

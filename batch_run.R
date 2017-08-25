@@ -18,8 +18,8 @@ save.results = TRUE
 batch.parameters = TRUE
 Batches <- 10
 
-run.id.base <- "vogi"
-Scenarios <- list (c("None","Single"),c("None","None"),c("None","Panel"),c("Panel","None"))
+run.id.base <- "vogi-v2"
+Scenarios <- list (c("None","Panel"),c("Panel","None"),c("None","Single"),c("None","None"))
 
 mainDir <- "./run-data"
 subDir <- run.id.base
