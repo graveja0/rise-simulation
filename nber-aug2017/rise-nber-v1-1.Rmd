@@ -41,8 +41,8 @@ require(dplyr)
 require(tidyverse)
 library(ellipse) 
 contains <- dplyr::contains
-run.id.base <- "vogi-debug"
-Strategies <- c("None-None","None-Single")
+run.id.base <- "vogi"
+Strategies <- c("None-None","None-Single","None-Panel")
 Strategies2 <- gsub("-",".",Strategies)
 getwd()
 
@@ -106,7 +106,7 @@ wide.fmla <-
   as.formula(paste0(paste0(c("psa_id", varying[-grep("psa_id|strategy|QALY|COST", varying)]), collapse =
                              "+"), "~variable+strategy"))
 
-ce.results.blah <-
+ce.results <-
   ce.results %>% reshape2::melt(id.vars = id.vars) %>% mutate(psa_id=as.character(psa_id)) %>% reshape2::dcast(wide.fmla)
 ```
 
@@ -267,7 +267,7 @@ Sim.long<- reshape2::melt(ce.results, id.vars=c("Iteration",grep("Probability",N
 ```
 
 ```{r,eval=FALSE,fig.cap="One Way Sensitivity Analysis"}
-parm<-'global.vProbabilityOrder'
+parm<-'risk.vProbabilityOrder_SC_A'
 range<-c(0,1)
 OneWaySA(Strategies,Parms,NHB,parm) 
 ```
@@ -300,8 +300,8 @@ TornadoOpt(data.frame(Parms),data.frame(NHB))
 
 
 ```{r,eval=FALSE}
-parm1<-'global.vProbabilityRead'
-parm2<-'global.vProbabilityOrder'
+parm1<-'risk.vProbabilityOrder_SC_A'
+parm2<-'risk.vProbabilityOrder_SC_B'
 range1<-c(0,1)
 range2<-c(0,1)
 TwoWaySA(Strategies,Parms,Outcomes=NHB,parm1,parm2,range1,range2)
@@ -329,7 +329,7 @@ TornadoAll(Strategies2,Parms,NHB)
 ```
 
 ```{r CEAC, fig.width=7, fig.height=6,warning=FALSE,eval=FALSE}
-  CEAC(lambda_range,Strategies,Outcomes)
+  CEAC(lambda_range,Strategies,Outcomes[,-1])
 ```
 
 

@@ -1,10 +1,25 @@
 rm(list=ls())
+
+pkg = list("simmer",
+           "ggplot2",
+           "reshape2",
+           "plyr", #need to load this before "dplyr"
+           "tidyr",
+           "dplyr",
+           "msm",
+           "data.table",
+           "deSolve",
+           "scales",
+           "knitr")
+
+invisible(lapply(pkg, require, character.only = TRUE))
+
 save.results = TRUE
 batch.parameters = TRUE
-Batches <- 2
+Batches <- 10
 
-run.id.base <- "vogi-debug"
-Scenarios <- list (c("None","Single"),c("None","None"))
+run.id.base <- "vogi"
+Scenarios <- list (c("None","Single"),c("None","None"),c("None","Panel"),c("Panel","None"))
 
 mainDir <- "./run-data"
 subDir <- run.id.base
@@ -29,13 +44,15 @@ for (ss in Scenarios)
   #can modify here
   inputs.init <- list(
     vHorizon = 80,
-    vN = 500,
+    vN = 500000,
     vAge= 40,
-    vN_PSA = 2
+    vN_PSA = 200
   )
  
   source("./sub-files/read-in-scenarios.R")
   source("./sub-files/set-inputs.R")
+  if (batch==1) cat(inputs$vProbabilityOrder_SC_A[1:10])
+  cat("\n")
   assign(paste0("inputs",paste0(ss,collapse="."),batch),inputs)
   assign(paste0("drawn.parameter.values",paste0(ss,collapse="."),batch),drawn.parameter.values)
   }
