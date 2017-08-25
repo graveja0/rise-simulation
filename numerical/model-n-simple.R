@@ -1,6 +1,6 @@
 library(deSolve)
 
-ss_death <- read.csv("ss-death-2011.csv")
+if (!exists("ss_death")) ss_death <- read.csv("ss-death-2011.csv")
 
 inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
 
