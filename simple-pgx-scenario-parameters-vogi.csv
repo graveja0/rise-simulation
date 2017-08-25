@@ -1,5 +1,5 @@
 param,type,value,psatype,description,common_drug_rare_serious_ade,common_drug_rare_serious_ade_psa_param1,common_drug_rare_serious_ade_psa_param2,common_drug_common_sig_ade,common_drug_common_sig_ade_psa_param1,common_drug_common_sig_ade_psa_param2,rare_drug_common_serious_ade,rare_drug_common_serious_ade_psa_param1,rare_drug_common_serious_ade_psa_param2,rare_drug_rare_serious_ade,rare_drug_rare_serious_ade_psa_param1,rare_drug_rare_serious_ade_psa_param2
-vGene,risk,0.2,constant,prevalence of targeted gene variant (at least one copy),0.5,50,50,0.5,50,50,0.5,50,50,0.5,50,50
+vGene,risk,0.2,uniform,prevalence of targeted gene variant (at least one copy),0.2,0,1,0.2,0,1,0.2,0,1,0.2,0,1
 vRiskA,risk,0.2,constant,probability of event A (drug indication),0.1,10,90,0.1,10,90,0.02,2,98,0.02,2,98
 vDurationA,risk,10,constant,time frame for event A (year),10,10,10,10,10,10,10,10,10,10,10,10
 vRiskB,risk,0.5,constant,risk of event B (downstream adverse event),0.02,2,98,0.1,10,90,0.1,10,90,0.02,2,98
@@ -14,9 +14,9 @@ A_c,cost,10000,constant,cost for event A,10000,10000,10000,10000,10000,10000,100
 B_Survive,cost,25000,constant,cost for event B survival,25000,25000,25000,1000,1000,1000,25000,25000,25000,25000,25000,25000
 B_Death,cost,15000,constant,cost for event B death,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000,15000
 rx,cost,100/30,constant,daily cost for usual treatment,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5,0.5
-alt,cost,300/30,constant,daily cost for alternative treatment,5,5,5,5,5,5,5,5,5,5,5,5
-single_test,global,0,constant,cost for single test,0,0,0,0,0,0,0,0,0,0,0,0
-panel_test,global,0,constant,cost for panel test,0,0,0,0,0,0,0,0,0,0,0,0
+alt,cost,300/30,constant,daily cost for alternative treatment,3,3,3,3,3,3,3,3,3,3,3,3
+single_test,global,0,uniform,cost for single test,100,0,200,100,0,200,100,0,200,100,0,200
+panel_test,global,0,uniform,cost for panel test,250,0,500,250,0,500,250,0,500,250,0,500
 A,type,1,constant,type (0=permanent; 1=temporary),1,1,1,1,1,1,1,1,1,1,1,1
 A_c,type,0,constant,type (0=permanent; 1=temporary),0,0,0,0,0,0,0,0,0,0,0,0
 B_Survive,type,0,constant,type (0=permanent; 1=temporary),0,0,0,0,0,0,0,0,0,0,0,0

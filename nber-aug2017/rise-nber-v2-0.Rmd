@@ -19,7 +19,7 @@ output:
 
 ```{r setup,warning=FALSE,message=FALSE}
 rm(list=ls())
-vN_PSA = 10
+vN_PSA = 2
 pkg = list("tidyverse","deSolve")
 invisible(lapply(pkg, require, character.only = TRUE))
 run.id.base <- "vogi-numerical"
@@ -197,7 +197,46 @@ names(drawn.parameter.values) <- unique(scenarios$type)
 
 
 ```{r}
-setwd("../numerical/")
+ss_death <- read.csv("../numerical/ss-death-2011.csv")
+
+source("../numerical/model-n-simple.R")
+
+config   <- drawn.parameter.values
+times    <- seq(0, 80, by=2/365)
+scenario <- "none"
+
+library(doParallel)
+library(broom)
+
+
+for (ss in c("none","reactive-single","reactive-panel","preemptive-panel"))
+{
+  registerDoParallel(cores = 8)
+  getDoParWorkers()
+
+    d <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
+    {
+      library(deSolve)
+      library(dplyr)
+      model.run(config, ii, ss, times)
+    }
+
+  temp <-
+    d %>% tbl_df() %>% cbind(as.data.frame(drawn.parameter.values))
+  varying1 <-
+    suppressWarnings(temp %>% map_dbl( ~ var(., na.rm = TRUE)))
+  varying <- unique(c("dQALY","dCOST",names(varying1[which(varying1 > 0)])))
+  temp <-
+    temp[, varying] %>% data.frame() %>% dplyr::mutate(iteration =
+                                                         row_number())  %>%
+    dplyr::select(iteration,
+                  dplyr::contains("QALY"),
+                  dplyr::contains("COST"),
+                  everything()) %>% mutate(strategy = ss)
+  assign(paste0("results.", ss), temp)
+}
+
+
 
 ```
 
