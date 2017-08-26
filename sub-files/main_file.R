@@ -20,7 +20,7 @@ invisible(lapply(pkg, require, character.only = TRUE))
 epsilon <- 0.000000000001
 
 # Read in the various scenarios and store in the inputs list object.
-source("./sub-files/read-in-scenarios.R")
+if (is.null(batch.parameters))  source("./sub-files/read-in-scenarios.R")
 
 
 ###

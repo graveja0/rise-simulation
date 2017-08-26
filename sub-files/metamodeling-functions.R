@@ -345,7 +345,7 @@ PlaneCE<-function(Strategies,Outcomes){
   colnames(CE)<-c("Strategy","Cost","Effectiveness")
   
   #Dataframe with means of strategies.
-  Means <- ddply(CE,.(Strategy),summarise,
+  Means <- CE %>% group_by(Strategy) %>% summarise(
                  N = length(Cost),
                  Cost.mean = mean(Cost),
                  Eff.mean = mean(Effectiveness))
@@ -393,7 +393,7 @@ ScatterCE<-function(Strategies,Outcomes){
                                                              centre=c(mean(Effectiveness),mean(Cost)))
     )),group=g))
   }
-  Means <- ddply(CE,.(Strategy),summarise,
+  Means <- CE %>% group_by(Strategy) %>% summarise(
                  N = length(Cost),
                  Cost.mean = mean(Cost),
                  Eff.mean = mean(Effectiveness))  
@@ -441,7 +441,7 @@ CEAC<-function(range,Strategies,Outcomes){
   CEA<-data.frame(cbind(lambda,CEA))
   colnames(CEA)<-c("Lambda", Strategies)
   
-  CEAC<-melt(CEA, id.vars = "Lambda") 
+  CEAC<-reshape2::melt(CEA, id.vars = "Lambda") 
   
   txtsize<-12
   ggplot(data = CEAC, aes(x = Lambda, y = value, color = variable)) +

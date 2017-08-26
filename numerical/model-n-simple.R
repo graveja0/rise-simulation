@@ -1,6 +1,6 @@
 library(deSolve)
 
-ss_death <- read.csv("ss-death-2011.csv")
+if (!exists("ss_death")) ss_death <- read.csv("ss-death-2011.csv")
 
 inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
 
@@ -109,9 +109,11 @@ costs <- function(solution, params)
   step     <- solution[2,'time'] - solution[1,'time']
   
   with(as.list(params), {
-    disc  <- length(key) * n + 3
+    disc  <- length(key) * n + 3 # Discount Rate
+    tests <- disc - 1
 
-    cost <- c_t*sum(diff(solution[,disc-1])*solution[2:k,disc]) # Testing costs
+    # Testing costs
+    cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
     b_d  <- 0
     for(i in 1:n)
     {
@@ -166,7 +168,7 @@ costs <- function(solution, params)
 # Defined scenarios
 scenarios <- c("none", "reactive-single", "reactive-panel", "preemptive-panel")
 
-generate.params <- function(config, i, scenario, disc_rate = 0.03)
+generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
 {
   risks        <- unlist(config$risk[i,])
   disutilities <- unlist(config$disutility[i,])
@@ -174,31 +176,33 @@ generate.params <- function(config, i, scenario, disc_rate = 0.03)
   costs        <- unlist(config$cost[i,])
   
   # Start building the params list with the length
-  n            <- length(risks)/9
+  n            <- length(unique(gsub(".*_SC_","",names(risks[grep("_SC_",names(risks))]))))
   params       <- list(n=n)
   
+  getval <- function(x,tt) unname(tt[grep(x,names(tt))])
+  
   params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
-  params$p_o   <- if(scenario == "none") rep(0.0, n) else unname(risks[1:n + n*4])
-  params$p_r   <- if(scenario == "none") rep(0.0, n) else unname(risks[1:n + n*5])
-  params$p_bd  <- unname(risks[1:n + n*2]) # Probability of death as direct result of B
-  params$p_g   <- unname(risks[1:n + n*3]) # Probability of genetic variant
-  params$r_a   <- unname(inst_rate(risks[1:n + n*6], risks[1:n])) # Rate of a
-  params$r_b   <- unname(inst_rate(risks[1:n + n*7], risks[1:n+n])) # Rate of b
-  params$rr_b  <- unname(risks[1:n + n*8]) # Relative Risk of B when on alt treatment
+  params$p_o   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityOrder",risks)
+  params$p_r   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityRead",risks)
+  params$p_bd  <- getval("vFatalB_",risks) # Probability of death as direct result of B
+  params$p_g   <- getval("vGene_",risks) # Probability of genetic variant
+  params$r_a   <- unname(inst_rate(getval("vRiskA_",risks), getval("vDurationA_",risks))) # Rate of a
+  params$r_b   <- unname(inst_rate(getval("vRiskB_",risks), getval("vDurationB_",risks))) # Rate of b
+  params$rr_b  <- getval("vRR_B_",risks) # Relative Risk of B when on alt treatment
 
   # Costs
-  params$c_a   <- unname(costs[1:n])       # Cost of Event A
-  params$c_bs  <- unname(costs[1:n + n*3]) # Cost of Surviving Event B
-  params$c_bd  <- unname(costs[1:n + n*2]) # Cost of Death from Event B
-  params$c_tx  <- unname(costs[1:n + n*4]) # Cost of Treatment (Daily)
-  params$c_alt <- unname(costs[1:n + n])   # Cost of alternate treatment (Daily)
+  params$c_a   <- getval("A_c_",costs)       # Cost of Event A
+  params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event B
+  params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event B
+  params$c_tx  <- getval("rx_",costs)   # Cost of Treatment (Daily)
+  params$c_alt <- getval("alt_",costs)    # Cost of alternate treatment (Daily)
   
   params$c_t   <- if(scenario %in% c("reactive-panel", "preemptive-panel"))
-                  { config$global$panel_test } else { config$global$single_test }
+                  { config$global$panel_test[1] } else { config$global$single_test[1] }
                   
-  params$d_a   <- unname(disutilities[1:n])# Disutility of A
-  params$d_at  <- unname(durations/365)    # Duration of A in years.
-  params$d_b   <- unname(disutilities[1:n+2*n]) # Disutility of B
+  params$d_a   <- getval("A_",disutilities) # Disutility of A
+  params$d_at  <- getval("A_",durations)/365    # Duration of A in years.
+  params$d_b   <- getval("B_Survive_",disutilities) # Disutility of B
   
   params$disc_rate <- disc_rate       # For computing discount
 
@@ -226,7 +230,7 @@ generate.initial <- function(scenario, params)
 # i is the point to use from the cube
 # scenario specifies scenario
 # times is the time points to solve (resolution)
-model.run <- function(config, i, scenario, times=seq(0, 40, by=1/365))
+model.run <- function(config, i, scenario, times=seq(0, 80, by=2/365))
 {
   params  <- generate.params(config, i, scenario)
   init    <- generate.initial(scenario, params)
