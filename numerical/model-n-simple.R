@@ -179,6 +179,8 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
   n            <- length(unique(gsub(".*_SC_","",names(risks[grep("_SC_",names(risks))]))))
   params       <- list(n=n)
   
+  if(n != round(n)) stop("Error (n) In generate.params")
+  
   getval <- function(x,tt) unname(tt[grep(x,names(tt))])
   
   params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
