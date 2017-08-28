@@ -17,433 +17,122 @@ output:
       collapsed: yes
 ---
 
-```{r setup,warning=FALSE,message=FALSE}
-rm(list=ls())
-vN_PSA = 1000
-pkg = list("tidyverse","deSolve")
-invisible(lapply(pkg, require, character.only = TRUE))
-run.id.base <- "vogi-numerical"
-Scenarios <- list (c("None","Single"),c("None","None"),c("None","Panel"),c("Panel","None"))
+# The Value of Geomic Information
 
-mainDir <- "../run-data"
-subDir <- run.id.base
+## Visualizing CE of Genetic Testing in a Cost-Effectiveness Plane
 
-if (!file.exists(file.path(mainDir,subDir))){
-  dir.create(file.path(mainDir, subDir))
-}
-```
+```{r blank-ce-plane,echo=FALSE,message=FALSE}
+require(ggthemes)
 
-# Basic Scenario
+# One indication
+# > vogi.none
+#      dCOST    dQALY possible     fatal_b       living
+# 1 4098.003 22.92677 23.01494 0.006469354 1.216035e-10
+# > vogi.single
+#      dCOST   dQALY possible     fatal_b       living
+# 1 4688.283 22.9329 23.01705 0.006163024 1.216807e-10
 
-This notebook tracks progress running the numerical soluation to the discrete event simulation for the NBER precision medicine meeting in September 2017.  The basis for the simulation is a "generic" scenario with the following parameters:
-
-  - A population of 40-year old women are at risk for both secular death and an event (A) that happens at a **vRiskA** rate over a **vDurationA** year period.
-  - All those who experience the event incur a cost of **A_c**.
-  - Those who experience the event experience a **disutility\$A** utility decrement for **duration\$A** years, and are placed on a drug for life that costs **cost\$rx**/day.
-  - There is a second event (B) that occurs downstream of Event A, with probability **vRiskB** over a **vDurationB** year period.
-  - Event B has a **vFatalB** case fatality rate with a **cost\$B_Death** cost among the decedents and, among the survivors, incurs a **cost\$B_Survive** cost and a **disutility\$B_Survive** disutility for life.
-  - There is a genetic test available that, if the person tests positive for the gene (prevalence is **vGene**), results in an alternative drug (for life) that costs **alt**/day but reduces the rate of the second event by a relative risk of **vRR_B**. 
-  - The genetic test can be ordered as a single gene test (cost is **cost\$single_test**) or a panel test (cost **cost\$panel_test**).
-  - Each individual is followed for up to 100 years or until death (either due to secular causese or case fatality). 
+# 20 Indications
+# > vogi.none20
+#      dCOST    dQALY possible   fatal_b       living
+# 1 78616.71 20.62479 22.26546 0.1205602 8.977745e-11
+# > vogi.single20
+#      dCOST    dQALY possible   fatal_b       living
+# 1 84948.41 20.73291 22.30471 0.1152217 9.092509e-11
+# > 
   
-The simulation is set up such that it can be scaled to K scenarios with varying parameters for all the above.
-
-# Draw Parameters
-
-```{r,message=FALSE,warning=FALSE}
-
-draw.parameter.values <- function(scenario.file ="../simple-pgx-scenario-parameters-vogi.csv",PSA.N=10) {
-  # Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
-  scenarios <- read.csv(scenario.file,stringsAsFactors = FALSE) %>% tbl_df()
-  scenario.names <- scenarios %>%
-    dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()
-  
-  # allow for up to 720 scenarios (just need enough scenario IDs)
-  lots.of.letters <- c(LETTERS, sapply(LETTERS, function(x) paste0(x, LETTERS)))
-  scenario.ids <- paste0("SC_",lots.of.letters[1:length(scenario.names)])
-  scenario.mapping <- cbind.data.frame(scenario.id = scenario.ids,scenarnio.name = scenario.names)
-  scenario.mapping <- scenario.names
-  names(scenario.names) = gsub("SC_","",scenario.ids)
-
-  drawn.parameter.values <- unique(scenarios$type) %>%
-    purrr::map(~draw.latin.hypercube(tt=.x,PSA.N=PSA.N,scenarios=scenarios,scenario.names=scenario.names,
-                                     scenario.ids=scenario.ids) )
-  names(drawn.parameter.values) <- unique(scenarios$type)
-  output <- list()
-  output[["parameter.draws"]] <- drawn.parameter.values
-  output[["scenarios"]] <- scenario.names
-  output
-}
-
-draw.latin.hypercube <- function(tt,PSA.N,scenarios,scenario.names,scenario.ids) {
-  
-  require(lhs)
-
-  params.full <-
-    scenarios %>% filter(type == tt) %>% select(-value, -description)
-  names.temp <- names(params.full)
-  for (y in scenario.names)
-    names.temp <-
-    gsub(paste0(paste0("^", y, "_"), "|", paste0("^", y, "$")),
-         paste0("SC_", names(scenario.names[which(scenario.names == y)])),
-         names.temp)
-  names(params.full) <- gsub("psa_param", "_psa", names.temp)
-  if (tt != "global")
-  {
-    params.full %>% reshape2::melt(id.vars = c("param", "psatype", "type")) %>% tbl_df() %>%
-      mutate(paramtype = gsub(paste0(scenario.ids, collapse = "|"), "", variable)) %>%
-      mutate(
-        variable = gsub("_psa1|_psa2", "", variable) ,
-        paramtype = gsub("^_", "", paramtype)
-      ) %>%
-      mutate(paramtype = ifelse(paramtype == "", "value", paramtype)) %>%
-      mutate(paramtype = ifelse(
-        psatype == "uniform",
-        gsub("psa1", "min", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "uniform",
-        gsub("psa2", "max", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "beta",
-        gsub("psa1", "shape1", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "beta",
-        gsub("psa2", "shape2", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "constant",
-        gsub("psa1", "constant1", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "constant",
-        gsub("psa2", "constant2", paramtype),
-        paramtype
-      )) %>%
-      rename(scenario = variable) %>% reshape2::dcast(param + psatype +
-                                                        type + scenario ~ paramtype) %>% data.frame() %>%
-      tidyr::unite(parameter, param, scenario) -> params2
-  } else
-  {
-    params.full %>% reshape2::melt(id.vars = c("param", "psatype", "type")) %>%
-      mutate(paramtype = gsub(paste0(scenario.ids, collapse ="|"), "", variable)) %>%
-      mutate(
-        variable = gsub("_psa1|_psa2", "", variable) ,
-        paramtype = gsub("^_", "", paramtype)
-      ) %>%
-      filter(variable == "SC_A") %>%
-      mutate(paramtype = ifelse(paramtype == "", "value", paramtype)) %>%
-      mutate(paramtype = ifelse(
-        psatype == "uniform",
-        gsub("psa1", "min", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "uniform",
-        gsub("psa2", "max", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "beta",
-        gsub("psa1", "shape1", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "beta",
-        gsub("psa2", "shape2", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "constant",
-        gsub("psa1", "constant1", paramtype),
-        paramtype
-      )) %>%
-      mutate(paramtype = ifelse(
-        psatype == "constant",
-        gsub("psa2", "constant2", paramtype),
-        paramtype
-      )) %>%
-      rename(scenario = variable) %>% reshape2::dcast(param + type + psatype + scenario ~
-                                              paramtype) %>%
-      mutate(scenario = "global")  %>% rename(parameter = param) -> params2
-  }
-  params.as.list <-
-    setNames(split(params2, 1:nrow(params2)), params2$parameter) %>% purrr::map( ~as.list(.x))
-  params <- unlist(lapply(params.as.list, function(x)
-    x$value))
-  
-  X <- randomLHS(PSA.N, length(params))
-  colnames(X) = names(params)
-  
-  lhc.draws.transformed <-
-    cbind.data.frame(lapply(params.as.list, function(x)
-    {
-      if (x[["psatype"]] == "beta")
-      {
-        qbeta(X[, x[["parameter"]]], shape1 = x[["shape1"]], shape2 = x[["shape2"]])
-      }
-      else if (x[["psatype"]] == "uniform")
-      {
-        qunif(X[, x[["parameter"]]], min = x[["min"]], max = x[["max"]])
-      }
-      else if (x[["psatype"]] == "constant")
-      {
-        rep(x[["value"]], PSA.N)
-      }
-    }))
-  lhc.draws.transformed
-}
-
-ss_death <- read.csv("../numerical/ss-death-2011.csv")
-source("../numerical/model-n-simple.R")
-times    <- seq(0, 80, by = 2 / 365)
-
-
-run.numerical <- function(scenario, ii,parameter.values) {
-  d <- model.run(config, ii, "none",times)
-  temp <-
-    d %>% tbl_df() %>% cbind(as.data.frame(parameter.values$parameter.draws))
-  varying1 <-
-    suppressWarnings(temp %>% map_dbl(~ var(., na.rm = TRUE)))
-  varying <-
-    unique(c("dQALY", "dCOST", names(varying1[which(varying1 > 0)])))
-  temp <-
-    temp[, varying] %>% data.frame() %>% dplyr::mutate(iteration =
-                                                         row_number())  %>%
-    dplyr::select(iteration,
-                  dplyr::contains("QALY"),
-                  dplyr::contains("COST"),
-                  everything()) %>% mutate(strategy = ss)
-  assign(paste0("results.", ss), temp)
-  temp
-}
-
-
-add.params <- function(run,parameter.draws,run.name="run") {
-  temp <-
-      run %>% tbl_df() %>% cbind(as.data.frame(parameter.draws))
-    varying1 <-
-      suppressWarnings(temp %>% map_dbl(~ var(., na.rm = TRUE)))
-    varying <-
-      unique(c("dQALY", "dCOST", names(varying1[which(varying1 > 0)])))
-    temp <-
-      temp[, varying] %>% data.frame() %>% dplyr::mutate(iteration =
-                                                           row_number())  %>%
-      dplyr::select(iteration,
-                    dplyr::contains("QALY"),
-                    dplyr::contains("COST"),
-                    everything()) %>% mutate(strategy = run.name)
-    return(temp)
-}
-
-```
-
-# Value of Genomic Information
-
-For this run, we will simulate a strategy with no genetic testing, and also with a zero-cost genetic test with perfect behavioral compliance (i.e., 100% ordering).  The difference in the net monetary benefit between these two strategies will provide an estimate of the value of utilizing genomic information.
-
-```{r,message=FALSE,warning=FALSE}
-# Value of Genomic Information 
-parameter.values <- draw.parameter.values(scenario.file ="../simple-pgx-scenario-parameters-vogi-v2.csv",PSA.N=1)
-config  <- parameter.values$parameter.draws 
-vogi.none <- model.run(config, 1, "none",times) %>% t() %>% data.frame()
-vogi.single <- model.run(config, 1, "reactive-single",times) %>% t() %>% data.frame()
-lambda <- seq(0,200000,1000)
-NMB.none <- (vogi.none$dQALY *lambda - vogi.none$dCOST)
-NMB.single <- (vogi.single$dQALY *lambda - vogi.single$dCOST)
-VOGI <- NMB.single-NMB.none
-#plot(lambda,VOGI)
-lambda[VOGI>0][1]
-```
-
-
-# Partial Value of Genomic Information
-For this run we will conduct a PSA with several varying parameters:
-
-- Gene Prevalance: Uniform(0,1)
-- Cost of Genetic Test
-- Probability of ordering/reading the test.
-
-```{r}
-
-library(doParallel)
-library(broom)
-
-parameter.values <- draw.parameter.values(scenario.file 
-      ="../simple-pgx-scenario-parameters-vogi-psa.csv",PSA.N=vN_PSA)
-config  <- parameter.values$parameter.draws 
-
-# Reactive Single
-registerDoParallel(cores = parallel::detectCores())
-getDoParWorkers()
-vogi.single.psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
-  {
-    library(deSolve)
-    library(dplyr)
-    model.run(config, ii, "reactive-single",times)
-  }
-vogi.single.psa <- add.params(run=vogi.single.psa.run,parameter.draws=parameter.values$parameter.draws,run.name="reactive.single") %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
-save(vogi.single.psa,file="../run-data/vogi-single-psa.RData")
-
-registerDoParallel(cores = parallel::detectCores())
-getDoParWorkers()
-vogi.panel.psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
-  {
-    library(deSolve)
-    library(dplyr)
-    model.run(config, ii, "reactive-panel",times)
-  }
-vogi.panel.psa <- add.params(run=vogi.panel.psa.run,parameter.draws=parameter.values$parameter.draws,run.name="reactive.panel") %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
-save(vogi.panel.psa,file="../run-data/vogi-panel-psa.RData")
-
-registerDoParallel(cores = parallel::detectCores())
-getDoParWorkers()
-vogi.prepanel.psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
-  {
-    library(deSolve)
-    library(dplyr)
-    model.run(config, ii, "preemptive-panel",times)
-  }
-vogi.prepanel.psa <- add.params(run=vogi.prepanel.psa.run,parameter.draws=parameter.values$parameter.draws,run.name="preemptive.panel") %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
-save(vogi.panel.psa,file="../run-data/vogi-prepanel-psa.RData")
-
-
-vogi.none.psa <- vogi.single.psa %>% mutate(strategy="none") %>% mutate(dQALY=vogi.none$dQALY,dCOST=vogi.none$dCOST) 
-
-ce.results <- rbind(vogi.single.psa,vogi.none.psa,vogi.panel.psa,vogi.prepanel.psa)
-```
-
-
-```{r}
-
-
-varying1 <-
-  suppressWarnings(ce.results %>% map_dbl( ~ var(., na.rm = TRUE)))
-varying <- names(varying1[which(varying1 > 0)])
-id.vars <-
-  c("psa_id", "strategy", varying[-grep("psa_id|strategy|QALY|COST", varying)])
-wide.fmla <-
-  as.formula(paste0(paste0(c("psa_id", varying[-grep("psa_id|strategy|QALY|COST", varying)]), collapse =
-                             "+"), "~variable+strategy"))
-
-ce.results <-
-  ce.results %>% reshape2::melt(id.vars = id.vars) %>% mutate(psa_id=as.character(psa_id)) %>% reshape2::dcast(wide.fmla)
-
-
-source("../sub-files/metamodeling-functions.R")
-
-#Determine the number of strategies
-Strategies <- Strategies2 <- c("none","reactive.single","reactive.panel","preemptive.panel")
-ndep <- length(Strategies)
-
-#Create vector of variable names
-Names <- ce.results %>% data.frame() %>% select(-psa_id) %>% colnames()
-Parms <- ce.results[, -grep("psa_id|Iteration|QALY|COST", colnames(ce.results))]   
-#Get parameter names
-paramNames <- colnames(Parms)
-indep <- ncol(Parms)
-Outcomes <- ce.results[, grep("psa_id|strategy|QALY|COST", colnames(ce.results))] 
-
+dCost.none1 = 4098
+dQALY.none1 = 22.92677
+dCost.single1 = 4688.283
+dQALY.single1 = 22.9329
+dCost.none20 = 78616.71
+dQALY.none20 = 20.62479 
+dCost.single20 = 84948.41
+dQALY.single20 = 20.73291
 lambda <- 50000
 
-for (i in seq(length(Strategies))) ce.results[,paste0("NHB_",Strategies2[i])] <- ce.results %>% select(-dplyr::contains("NHB"),-dplyr::contains("NMB")) %>% select_if(grepl(Strategies2[i],names(.))) %>% mutate_at(vars(contains("COST")),funs(-1*./lambda)) %>% mutate(NHB=rowSums(.)) %>% pull(NHB)
+Means <- data.frame(delta_eff=c(dQALY.single1-dQALY.none1,dQALY.single20-dQALY.none20),
+                    delta_cost=c(dCost.single1-dCost.none1,dCost.single20-dCost.none20),
+                    scenario = c("Single Indication","20 Indications"))
+txtsize <- 12
 
-for (i in seq(length(Strategies))) ce.results[,paste0("NMB_",Strategies2[i])] <- ce.results %>% select(-contains("NHB"),-dplyr::contains("NMB")) %>% select_if(grepl(Strategies2[i],names(.))) %>% mutate_at(vars(contains("COST")),funs(-1*.)) %>% mutate_at(vars(contains("QALY")),funs(lambda*.)) %>%  mutate(NMB=rowSums(.)) %>% pull(NMB)
+YLim <- c(-500,7000)
+XLim <- c(-.05,.20)
+Lambda.Pos <- YLim[2]/lambda
 
-ce.results <- ce.results %>% mutate(Iteration=row_number())
+ggplot(Means,aes(x=delta_eff,y=delta_cost,colour=scenario))+geom_blank()+
+  theme_tufte()+xlim(XLim)+ylim(YLim)+geom_point()+
+  geom_hline(aes(yintercept=0))+geom_vline(aes(xintercept=0))+
+  geom_abline(aes(intercept=0,slope=lambda),lty=3)+
+  annotate("text",x=Lambda.Pos,y=YLim[2],label= paste0("lambda==50000"),hjust=-.25,parse=T)+
+  ylab("Cost Change")+xlab("QALY Change")
 
-NHB <- ce.results %>% dplyr::select(dplyr::contains("NHB"))
-NMB <- ce.results %>% dplyr::select(dplyr::contains("NMB"))
+
+
 
 ```
-
-
 
 ```{r}
-nmb.gg <- reshape2::melt(NMB,  
-               variable.name = "Strategy", 
-               value.name = "NMB")
-colnames(nmb.gg) <- c("Strategy","NMB")
 
-## Plot NMB for different strategies
-require(ggplot2)
-require(scales)  # For dollar labels
-require(grid)
-number_ticks <- function(n) {function(limits) pretty(limits, n)} 
-# Faceted plot by Strategy
-ggplot(nmb.gg, aes(x = NMB/1000)) +
-  geom_histogram(aes(y =..density..), col="black", fill = "gray") +
-  geom_density(color = "red") +
-  facet_wrap(~ Strategy, scales = "free_y") +
-  xlab("Net Monetary Benefit (NMB) x10^3") +
-  scale_x_continuous(breaks = number_ticks(5), labels = dollar) + 
-  scale_y_continuous(breaks = number_ticks(5)) + 
-  theme_bw()
 
+ Means <- CE %>% group_by(Strategy) %>% summarise(
+                 N = length(Cost),
+                 Cost.mean = mean(Cost),
+                 Eff.mean = mean(Effectiveness))  
+  #Define ggplot object
+  txtsize<-12
+  ggplot(CE, aes(x=Effectiveness, y=Cost, color=Strategy)) + 
+    geom_point(size=0.7) +
+    geom_point(data = Means,aes(x = Eff.mean, y = Cost.mean, shape=Strategy),size=8,fill="white") +
+    geom_text(data = Means,aes(x = Eff.mean, y = Cost.mean, label=c(seq(nrow(Means)))),size=5,colour="gray",alpha=1) +
+    geom_path(data=df_ell, aes(x=x, y=y,colour=group), size=1, linetype=2, alpha=1) + # draw ellipse lines
+    ggtitle("Cost-Effectiveness Scatterplot") +
+    scale_colour_discrete(l=50) +  # Use a slightly darker palette than normal
+    scale_y_continuous(labels = dollar)+
+    scale_x_continuous(breaks=number_ticks(6))+
+    theme_bw() +
+    theme(legend.position="bottom",legend.title=element_text(size = txtsize),
+          legend.key = element_rect(colour = "black"),
+          legend.text = element_text(size = txtsize),
+          title = element_text(face="bold", size=15),
+          axis.title.x = element_text(face="bold", size=txtsize),
+          axis.title.y = element_text(face="bold", size=txtsize),
+          axis.text.y = element_text(size=txtsize),
+          axis.text.x = element_text(size=txtsize))
+  
+  
 ```
 
 
-```{r}
-n.sim <- dim(NMB)[1]
 
-Strategy1 <- "none"
-Strategy2 <- "reactive.single"
+Our estimate of the VOGI is based on the Net Monetary Benefit (NMB) as a summary measure of cost-effectiveness. NMB is a common metric summarizing (in dollar terms) the health benefits and costs of a given treatment alternative. For treatment option ($\alpha$) and model parameters $\mathbf{\pi} = \{ \pi_1 , ...., \pi_I \}$ π = define:
 
-inmb <- NMB %>% select_at(vars(contains(Strategy1),contains(Strategy2))) %>% mutate_at(vars(contains(Strategy2)),funs(-1*.)) %>%  mutate(Net_NMB=rowSums(.)) %>% 
-  mutate(Simulation = row_number()) %>% select(Simulation,Net_NMB)
+\[
+(1) \quad \quad NMB(\alpha, \mathbf{\pi}) = \lambda \cdot Q(\alpha,\mathbf{\pi}) – C(\alpha, \mathbf{\pi}) 
+\]
 
-#### Incremental NMB (INMB) ####
-# Calculate INMB of B vs A
-# Only B vs A but we could have plotted all combinations
+Where $Q(\alpha, \mathbf{\pi})$ is the QALY measure from the intervention, $C(\alpha, \mathbf{\pi})$ is the cost of the intervention, and $\lambda $ is the fixed value of the marginal societal willingness to pay for an incremental health improvement (i.e., \$50,000/QALY). For a given $ \lambda $ we define the optimal treatment as that which provides the maximum NMB on average:
 
-## Format data frame suitably for plotting
-inmb.gg <- reshape2::melt(inmb, id.vars = "Simulation", 
-                variable.name = "Comparison", 
-                value.name = "INMB")
-colnames(inmb.gg) <- c("Simulation","Comparison","INMB")
-txtsize<-16
-## Plot INMB
-ggplot(inmb.gg, aes(x = INMB/1000)) +
-  geom_histogram(aes(y =..density..), col="black", fill = "gray") +
-  geom_density(color = "red") +
-  geom_vline(xintercept = 0, col = 4, size = 1.5, linetype = "dashed") +
-  facet_wrap(~ Comparison, scales = "free_y") +
-  xlab("Incremental Net Monetary Benefit (INMB) in thousand $") +
-  scale_x_continuous(breaks = number_ticks(5), limits = c(-100, 100)) + 
-  scale_y_continuous(breaks = number_ticks(5)) + 
-  theme_bw(base_size = 14)
+\[ 
+(2) \quad \quad \textrm{max}_\alpha \quad  E_{\mathbf{\pi}}[ \textrm{NMB}(\alpha, \mathbf{\pi})	] 
+\]
 
-```
+When estimating equation (2) for the baseline no-genotyping scenario, all model parameters $\mathbf{\pi}=\{ \pi_1,..., \pi_I}$ are held fixed at their mean value.  In other words, we assume that clinical decisions on drug therapy are based on the average population-level risk of an adverse event and not on information on the patient’s individual risk, preferences or characteristics.  
 
+Conversely, to study the value of information we directly model heterogeneity in $\mathbf{\pi}$ by drawing values from the joint probability distribution $p(\mathbf{\pi})$ at each iteration of the model.97 To estimate the EVGT we will utilize genetic data from the simulated patient cohort and model an alternative scenario in which clinicians obtain and act on information on genotype for that patient. The underlying genetic results used for these analyses demonstrate reproducibility of greater than 99%, including greater than 99% concordance and greater than 95% call rate. Under this “perfect information” scenario the physician utilizes information on each patient’s genetic makeup and chooses the optimal drug at the time of initial prescription, thus minimizing the risk of an adverse event. The average NMB under this scenario is value of perfect information on genotype and is given by:
 
-```{r}
-#### Loss Matrix ####  
-# Find optimal strategy (d*) based on the highest expected NMB
-d.star <- which.max(colMeans(NMB))
-d.star
+\[
+(3) \quad \quad \textrm{E}_{\mathbf{\pi}} [ \textrm{max}_{\alpha} \quad \textrm{NMB}(\alpha, \mathbf{\pi})]
+\]
 
-# Or without iterating (much faster!)
-loss <- as.matrix(NMB - NMB[, d.star])
-head(loss)
+Where the expectation is taken over the joint probability distribution of $\mathbf{\pi}$ (which in this case is simply the distribution of patients with each drug phenotype).  
 
-#### EVPI ####
-## Find maximum loss overall strategies at each state of the world 
-## (i.e., PSA sample)
-require(matrixStats)
-max.loss.i <- rowMaxs(loss)
-head(max.loss.i)
-## Average across all states of the world
-evpi <- mean(max.loss.i)
-evpi
+We obtain an estimate of the EVGT by taking the difference between equations (3) and (2): 
 
+\[
+ (4) \quad \quad \textrm{EVGT} =\textrm{E}_{\mathbf{\pi}} [ \textrm{max}_{\alpha} \quad \textrm{NMB}(\alpha, \mathbf{\pi})]- \textrm{max}_\alpha \quad  E_{\mathbf{\pi}}[ \textrm{NMB}(\alpha, \mathbf{\pi})	]
+\]
 
-lambda_range<-c(1000,350000,50)
-```
+The EVGT provides an estimate of the opportunity cost (in dollar terms) of failing to incorporate genetic information into clinical decisions at the point of prescribing.98  In other words, it tells us maximum society would be willing to pay (per patient) to implement genotype-tailored care.  An estimate of the total amount society (or a payer) would be willing to pay can be obtained by multiplying this value by the total number of patients and by the rate of indication incidence in the population.98 
+
 
