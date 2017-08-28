@@ -173,6 +173,7 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
   risks        <- unlist(config$risk[i,])
   disutilities <- unlist(config$disutility[i,])
   durations    <- unlist(config$duration[i,])
+  names(durations) <- names(config$duration)
   costs        <- unlist(config$cost[i,])
   
   # Start building the params list with the length
