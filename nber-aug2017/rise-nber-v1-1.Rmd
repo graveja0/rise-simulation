@@ -167,7 +167,7 @@ ggplot(nmb.gg, aes(x = NMB/1000)) +
 n.sim <- dim(NMB)[1]
 
 Strategy1 <- "None.None"
-Strategy2 <- "None.Single"
+Strategy2 <- "None.Panel"
 
 inmb <- NMB %>% select_at(vars(contains(Strategy1),contains(Strategy2))) %>% mutate_at(vars(contains(Strategy2)),funs(-1*.)) %>%  mutate(Net_NMB=rowSums(.)) %>% 
   mutate(Simulation = row_number()) %>% select(Simulation,Net_NMB)

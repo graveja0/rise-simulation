@@ -19,7 +19,7 @@ output:
 
 ```{r setup,warning=FALSE,message=FALSE}
 rm(list=ls())
-vN_PSA = 2
+vN_PSA = 1000
 pkg = list("tidyverse","deSolve")
 invisible(lapply(pkg, require, character.only = TRUE))
 run.id.base <- "vogi-numerical"
@@ -50,23 +50,35 @@ The simulation is set up such that it can be scaled to K scenarios with varying 
 
 # Draw Parameters
 
-```{r}
-scenario.file ="../simple-pgx-scenario-parameters-vogi.csv"
+```{r,message=FALSE,warning=FALSE}
 
-# Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
-scenarios <- read.csv(scenario.file,stringsAsFactors = FALSE) %>% tbl_df(); head(scenarios)
-scenario.names <- scenarios %>% dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()
+draw.parameter.values <- function(scenario.file ="../simple-pgx-scenario-parameters-vogi.csv",PSA.N=10) {
+  # Read in the scenario spreadsheet and map the (long) scenario names to a generic A, B, C, etc.
+  scenarios <- read.csv(scenario.file,stringsAsFactors = FALSE) %>% tbl_df()
+  scenario.names <- scenarios %>%
+    dplyr::select(-param,-type,-value,-psatype,-description,-dplyr::contains("psa_param")) %>% names()
+  
+  # allow for up to 720 scenarios (just need enough scenario IDs)
+  lots.of.letters <- c(LETTERS, sapply(LETTERS, function(x) paste0(x, LETTERS)))
+  scenario.ids <- paste0("SC_",lots.of.letters[1:length(scenario.names)])
+  scenario.mapping <- cbind.data.frame(scenario.id = scenario.ids,scenarnio.name = scenario.names)
+  scenario.mapping <- scenario.names
+  names(scenario.names) = gsub("SC_","",scenario.ids)
 
-# allow for up to 720 scenarios (just need enough scenario IDs)
-lots.of.letters <- c(LETTERS, sapply(LETTERS, function(x) paste0(x, LETTERS)))
-scenario.ids <- paste0("SC_",lots.of.letters[1:length(scenario.names)])
-scenario.mapping <- cbind.data.frame(scenario.id = scenario.ids,scenarnio.name = scenario.names)
-scenario.mapping <- scenario.names
-names(scenario.names) = gsub("SC_","",scenario.ids)
+  drawn.parameter.values <- unique(scenarios$type) %>%
+    purrr::map(~draw.latin.hypercube(tt=.x,PSA.N=PSA.N,scenarios=scenarios,scenario.names=scenario.names,
+                                     scenario.ids=scenario.ids) )
+  names(drawn.parameter.values) <- unique(scenarios$type)
+  output <- list()
+  output[["parameter.draws"]] <- drawn.parameter.values
+  output[["scenarios"]] <- scenario.names
+  output
+}
 
-require(lhs)
+draw.latin.hypercube <- function(tt,PSA.N,scenarios,scenario.names,scenario.ids) {
+  
+  require(lhs)
 
-draw.latin.hypercube <- function(tt, PSA.N = 10) {
   params.full <-
     scenarios %>% filter(type == tt) %>% select(-value, -description)
   names.temp <- names(params.full)
@@ -120,8 +132,8 @@ draw.latin.hypercube <- function(tt, PSA.N = 10) {
       tidyr::unite(parameter, param, scenario) -> params2
   } else
   {
-    params.full %>% reshape2::melt(id.vars = c("param", "psatype", "type")) %>% mutate(paramtype = gsub(paste0(scenario.ids, collapse =
-                                                                                                       "|"), "", variable)) %>%
+    params.full %>% reshape2::melt(id.vars = c("param", "psatype", "type")) %>%
+      mutate(paramtype = gsub(paste0(scenario.ids, collapse ="|"), "", variable)) %>%
       mutate(
         variable = gsub("_psa1|_psa2", "", variable) ,
         paramtype = gsub("^_", "", paramtype)
@@ -163,12 +175,11 @@ draw.latin.hypercube <- function(tt, PSA.N = 10) {
       mutate(scenario = "global")  %>% rename(parameter = param) -> params2
   }
   params.as.list <-
-    setNames(split(params2, 1:nrow(params2)), params2$parameter) %>% purrr::map( ~
-                                                                                   as.list(.x))
+    setNames(split(params2, 1:nrow(params2)), params2$parameter) %>% purrr::map( ~as.list(.x))
   params <- unlist(lapply(params.as.list, function(x)
     x$value))
   
-  X <- randomLHS(vN_PSA, length(params))
+  X <- randomLHS(PSA.N, length(params))
   colnames(X) = names(params)
   
   lhc.draws.transformed <-
@@ -190,42 +201,19 @@ draw.latin.hypercube <- function(tt, PSA.N = 10) {
   lhc.draws.transformed
 }
 
-drawn.parameter.values <- unique(scenarios$type) %>% purrr::map(~draw.latin.hypercube(tt=.x,PSA.N=vN_PSA) )
-names(drawn.parameter.values) <- unique(scenarios$type)
-
-```
-
-
-```{r}
 ss_death <- read.csv("../numerical/ss-death-2011.csv")
-
 source("../numerical/model-n-simple.R")
-
-config   <- drawn.parameter.values
-times    <- seq(0, 80, by=2/365)
-scenario <- "none"
-
-library(doParallel)
-library(broom)
+times    <- seq(0, 80, by = 2 / 365)
 
 
-for (ss in c("none","reactive-single","reactive-panel","preemptive-panel"))
-{
-  registerDoParallel(cores = 8)
-  getDoParWorkers()
-
-    d <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
-    {
-      library(deSolve)
-      library(dplyr)
-      model.run(config, ii, ss, times)
-    }
-
+run.numerical <- function(scenario, ii,parameter.values) {
+  d <- model.run(config, ii, "none",times)
   temp <-
-    d %>% tbl_df() %>% cbind(as.data.frame(drawn.parameter.values))
+    d %>% tbl_df() %>% cbind(as.data.frame(parameter.values$parameter.draws))
   varying1 <-
-    suppressWarnings(temp %>% map_dbl( ~ var(., na.rm = TRUE)))
-  varying <- unique(c("dQALY","dCOST",names(varying1[which(varying1 > 0)])))
+    suppressWarnings(temp %>% map_dbl(~ var(., na.rm = TRUE)))
+  varying <-
+    unique(c("dQALY", "dCOST", names(varying1[which(varying1 > 0)])))
   temp <-
     temp[, varying] %>% data.frame() %>% dplyr::mutate(iteration =
                                                          row_number())  %>%
@@ -234,10 +222,228 @@ for (ss in c("none","reactive-single","reactive-panel","preemptive-panel"))
                   dplyr::contains("COST"),
                   everything()) %>% mutate(strategy = ss)
   assign(paste0("results.", ss), temp)
+  temp
 }
 
 
+add.params <- function(run,parameter.draws,run.name="run") {
+  temp <-
+      run %>% tbl_df() %>% cbind(as.data.frame(parameter.draws))
+    varying1 <-
+      suppressWarnings(temp %>% map_dbl(~ var(., na.rm = TRUE)))
+    varying <-
+      unique(c("dQALY", "dCOST", names(varying1[which(varying1 > 0)])))
+    temp <-
+      temp[, varying] %>% data.frame() %>% dplyr::mutate(iteration =
+                                                           row_number())  %>%
+      dplyr::select(iteration,
+                    dplyr::contains("QALY"),
+                    dplyr::contains("COST"),
+                    everything()) %>% mutate(strategy = run.name)
+    return(temp)
+}
 
 ```
 
+# Value of Genomic Information
+
+For this run, we will simulate a strategy with no genetic testing, and also with a zero-cost genetic test with perfect behavioral compliance (i.e., 100% ordering).  The difference in the net monetary benefit between these two strategies will provide an estimate of the value of utilizing genomic information.
+
+```{r,message=FALSE,warning=FALSE}
+# Value of Genomic Information 
+parameter.values <- draw.parameter.values(scenario.file ="../simple-pgx-scenario-parameters-vogi-v2.csv",PSA.N=1)
+config  <- parameter.values$parameter.draws 
+vogi.none <- model.run(config, 1, "none",times) %>% t() %>% data.frame()
+vogi.single <- model.run(config, 1, "reactive-single",times) %>% t() %>% data.frame()
+lambda <- seq(0,200000,1000)
+NMB.none <- (vogi.none$dQALY *lambda - vogi.none$dCOST)
+NMB.single <- (vogi.single$dQALY *lambda - vogi.single$dCOST)
+VOGI <- NMB.single-NMB.none
+#plot(lambda,VOGI)
+lambda[VOGI>0][1]
+```
+
+
+# Partial Value of Genomic Information
+For this run we will conduct a PSA with several varying parameters:
+
+- Gene Prevalance: Uniform(0,1)
+- Cost of Genetic Test
+- Probability of ordering/reading the test.
+
+```{r}
+
+library(doParallel)
+library(broom)
+
+parameter.values <- draw.parameter.values(scenario.file 
+      ="../simple-pgx-scenario-parameters-vogi-psa.csv",PSA.N=vN_PSA)
+config  <- parameter.values$parameter.draws 
+
+# Reactive Single
+registerDoParallel(cores = parallel::detectCores())
+getDoParWorkers()
+vogi.single.psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
+  {
+    library(deSolve)
+    library(dplyr)
+    model.run(config, ii, "reactive-single",times)
+  }
+vogi.single.psa <- add.params(run=vogi.single.psa.run,parameter.draws=parameter.values$parameter.draws,run.name="reactive.single") %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
+save(vogi.single.psa,file="../run-data/vogi-single-psa.RData")
+
+registerDoParallel(cores = parallel::detectCores())
+getDoParWorkers()
+vogi.panel.psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
+  {
+    library(deSolve)
+    library(dplyr)
+    model.run(config, ii, "reactive-panel",times)
+  }
+vogi.panel.psa <- add.params(run=vogi.panel.psa.run,parameter.draws=parameter.values$parameter.draws,run.name="reactive.panel") %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
+save(vogi.panel.psa,file="../run-data/vogi-panel-psa.RData")
+
+registerDoParallel(cores = parallel::detectCores())
+getDoParWorkers()
+vogi.prepanel.psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
+  {
+    library(deSolve)
+    library(dplyr)
+    model.run(config, ii, "preemptive-panel",times)
+  }
+vogi.prepanel.psa <- add.params(run=vogi.prepanel.psa.run,parameter.draws=parameter.values$parameter.draws,run.name="preemptive.panel") %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
+save(vogi.panel.psa,file="../run-data/vogi-prepanel-psa.RData")
+
+
+vogi.none.psa <- vogi.single.psa %>% mutate(strategy="none") %>% mutate(dQALY=vogi.none$dQALY,dCOST=vogi.none$dCOST) 
+
+ce.results <- rbind(vogi.single.psa,vogi.none.psa,vogi.panel.psa,vogi.prepanel.psa)
+```
+
+
+```{r}
+
+
+varying1 <-
+  suppressWarnings(ce.results %>% map_dbl( ~ var(., na.rm = TRUE)))
+varying <- names(varying1[which(varying1 > 0)])
+id.vars <-
+  c("psa_id", "strategy", varying[-grep("psa_id|strategy|QALY|COST", varying)])
+wide.fmla <-
+  as.formula(paste0(paste0(c("psa_id", varying[-grep("psa_id|strategy|QALY|COST", varying)]), collapse =
+                             "+"), "~variable+strategy"))
+
+ce.results <-
+  ce.results %>% reshape2::melt(id.vars = id.vars) %>% mutate(psa_id=as.character(psa_id)) %>% reshape2::dcast(wide.fmla)
+
+
+source("../sub-files/metamodeling-functions.R")
+
+#Determine the number of strategies
+Strategies <- Strategies2 <- c("none","reactive.single","reactive.panel","preemptive.panel")
+ndep <- length(Strategies)
+
+#Create vector of variable names
+Names <- ce.results %>% data.frame() %>% select(-psa_id) %>% colnames()
+Parms <- ce.results[, -grep("psa_id|Iteration|QALY|COST", colnames(ce.results))]   
+#Get parameter names
+paramNames <- colnames(Parms)
+indep <- ncol(Parms)
+Outcomes <- ce.results[, grep("psa_id|strategy|QALY|COST", colnames(ce.results))] 
+
+lambda <- 50000
+
+for (i in seq(length(Strategies))) ce.results[,paste0("NHB_",Strategies2[i])] <- ce.results %>% select(-dplyr::contains("NHB"),-dplyr::contains("NMB")) %>% select_if(grepl(Strategies2[i],names(.))) %>% mutate_at(vars(contains("COST")),funs(-1*./lambda)) %>% mutate(NHB=rowSums(.)) %>% pull(NHB)
+
+for (i in seq(length(Strategies))) ce.results[,paste0("NMB_",Strategies2[i])] <- ce.results %>% select(-contains("NHB"),-dplyr::contains("NMB")) %>% select_if(grepl(Strategies2[i],names(.))) %>% mutate_at(vars(contains("COST")),funs(-1*.)) %>% mutate_at(vars(contains("QALY")),funs(lambda*.)) %>%  mutate(NMB=rowSums(.)) %>% pull(NMB)
+
+ce.results <- ce.results %>% mutate(Iteration=row_number())
+
+NHB <- ce.results %>% dplyr::select(dplyr::contains("NHB"))
+NMB <- ce.results %>% dplyr::select(dplyr::contains("NMB"))
+
+```
+
+
+
+```{r}
+nmb.gg <- reshape2::melt(NMB,  
+               variable.name = "Strategy", 
+               value.name = "NMB")
+colnames(nmb.gg) <- c("Strategy","NMB")
+
+## Plot NMB for different strategies
+require(ggplot2)
+require(scales)  # For dollar labels
+require(grid)
+number_ticks <- function(n) {function(limits) pretty(limits, n)} 
+# Faceted plot by Strategy
+ggplot(nmb.gg, aes(x = NMB/1000)) +
+  geom_histogram(aes(y =..density..), col="black", fill = "gray") +
+  geom_density(color = "red") +
+  facet_wrap(~ Strategy, scales = "free_y") +
+  xlab("Net Monetary Benefit (NMB) x10^3") +
+  scale_x_continuous(breaks = number_ticks(5), labels = dollar) + 
+  scale_y_continuous(breaks = number_ticks(5)) + 
+  theme_bw()
+
+```
+
+
+```{r}
+n.sim <- dim(NMB)[1]
+
+Strategy1 <- "none"
+Strategy2 <- "reactive.single"
+
+inmb <- NMB %>% select_at(vars(contains(Strategy1),contains(Strategy2))) %>% mutate_at(vars(contains(Strategy2)),funs(-1*.)) %>%  mutate(Net_NMB=rowSums(.)) %>% 
+  mutate(Simulation = row_number()) %>% select(Simulation,Net_NMB)
+
+#### Incremental NMB (INMB) ####
+# Calculate INMB of B vs A
+# Only B vs A but we could have plotted all combinations
+
+## Format data frame suitably for plotting
+inmb.gg <- reshape2::melt(inmb, id.vars = "Simulation", 
+                variable.name = "Comparison", 
+                value.name = "INMB")
+colnames(inmb.gg) <- c("Simulation","Comparison","INMB")
+txtsize<-16
+## Plot INMB
+ggplot(inmb.gg, aes(x = INMB/1000)) +
+  geom_histogram(aes(y =..density..), col="black", fill = "gray") +
+  geom_density(color = "red") +
+  geom_vline(xintercept = 0, col = 4, size = 1.5, linetype = "dashed") +
+  facet_wrap(~ Comparison, scales = "free_y") +
+  xlab("Incremental Net Monetary Benefit (INMB) in thousand $") +
+  scale_x_continuous(breaks = number_ticks(5), limits = c(-100, 100)) + 
+  scale_y_continuous(breaks = number_ticks(5)) + 
+  theme_bw(base_size = 14)
+
+```
+
+
+```{r}
+#### Loss Matrix ####  
+# Find optimal strategy (d*) based on the highest expected NMB
+d.star <- which.max(colMeans(NMB))
+d.star
+
+# Or without iterating (much faster!)
+loss <- as.matrix(NMB - NMB[, d.star])
+head(loss)
+
+#### EVPI ####
+## Find maximum loss overall strategies at each state of the world 
+## (i.e., PSA sample)
+require(matrixStats)
+max.loss.i <- rowMaxs(loss)
+head(max.loss.i)
+## Average across all states of the world
+evpi <- mean(max.loss.i)
+evpi
+
+
+lambda_range<-c(1000,350000,50)
+```
 
