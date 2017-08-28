@@ -1,5 +1,5 @@
 rm(list=ls())
-vN_PSA = 8
+vN_PSA = 5000
 pkg = list("tidyverse","deSolve","ellipse","readxl","lhs")
 invisible(lapply(pkg, require, character.only = TRUE))
 run.id.base <- "vogi-numerical"
