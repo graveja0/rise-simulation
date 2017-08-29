@@ -123,11 +123,11 @@ costs <- function(solution, params)
     for(i in 1:n)
     {
       # Compute Discounted Cost
-      treatment.cost <- 
+      treatment.cost <- treatment.cost +
         c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
         c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
         c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc])
-      drug.cost <-
+      drug.cost <- drug.cost + 
         c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
         c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
         c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
