@@ -164,10 +164,10 @@ costs <- function(solution, params)
     c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
       dQALY       = unname(pQALY-disA-disB),
       possible    = unname(pQALY),
-     # disutil_a  = unname(disA),
-     # disutil_b  = unname(disB),
       fatal_b     = unname(b_d),
       living      = unname(life[k]),
+      disutil_a   = unname(disA),
+      disutil_b   = unname(disB),
       dCOST.test  = unname(test.cost),
       dCOST.drug  = unname(drug.cost),
       dCOST.treat = unname(treatment.cost)
@@ -207,14 +207,14 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
   params$c_a   <- getval("A_c_",costs)       # Cost of Event A
   params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event B
   params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event B
-  params$c_tx  <- getval("rx_",costs)   # Cost of Treatment (Daily)
-  params$c_alt <- getval("alt_",costs)    # Cost of alternate treatment (Daily)
+  params$c_tx  <- getval("rx_",costs)        # Cost of Treatment (Daily)
+  params$c_alt <- getval("alt_",costs)       # Cost of alternate treatment (Daily)
   
   params$c_t   <- if(scenario %in% c("reactive-panel", "preemptive-panel"))
                   { config$global$panel_test[1] } else { config$global$single_test[1] }
                   
-  params$d_a   <- getval("A_",disutilities) # Disutility of A
-  params$d_at  <- getval("A_",durations)/365    # Duration of A in years.
+  params$d_a   <- getval("A_",disutilities)         # Disutility of A
+  params$d_at  <- getval("A_",durations)/365        # Duration of A in years.
   params$d_b   <- getval("B_Survive_",disutilities) # Disutility of B
   
   params$disc_rate <- disc_rate       # For computing discount
