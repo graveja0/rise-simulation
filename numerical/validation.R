@@ -11,6 +11,7 @@ params   <- generate.params(config, i, scenario)
 init     <- generate.initial(scenario, params)
 x        <- dede(init, times, genModel, params)
 
+round(costs(x, params), 3)
 round(costs(x, params)*2e5, 2)
 
 

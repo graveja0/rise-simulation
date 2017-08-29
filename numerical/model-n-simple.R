@@ -112,21 +112,28 @@ costs <- function(solution, params)
     disc  <- length(key) * n + 3 # Discount Rate
     tests <- disc - 1
 
+
     # Testing costs
-    cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
-    b_d  <- 0
+    test.cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
+
+    # Loop over conditions
+    treatment.cost <- 0
+    drug.cost      <- 0
+    b_d            <- 0
     for(i in 1:n)
     {
       # Compute Discounted Cost
-      cost <- cost + 
-              c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
-              c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
-              c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc]) +
-              c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
-              c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
-              c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
-              c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
+      treatment.cost <- 
+        c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
+        c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
+        c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc])
+      drug.cost <-
+        c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
+        c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
+        c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
+        c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
       
+      # Sum fatal b events from all conditions
       b_d  <- b_d + solution[k,maps('b_d', i)]
     }
     
@@ -154,13 +161,16 @@ costs <- function(solution, params)
               d_b[i]*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step 
     }
 
-    c(dCOST       = unname(cost),
+    c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
       dQALY       = unname(pQALY-disA-disB),
       possible    = unname(pQALY),
      # disutil_a  = unname(disA),
      # disutil_b  = unname(disB),
       fatal_b     = unname(b_d),
-      living      = unname(life[k])
+      living      = unname(life[k]),
+      dCOST.test  = unname(test.cost),
+      dCOST.drug  = unname(drug.cost),
+      dCOST.treat = unname(treatment.cost)
       )
   })
 }
