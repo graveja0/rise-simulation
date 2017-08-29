@@ -112,21 +112,28 @@ costs <- function(solution, params)
     disc  <- length(key) * n + 3 # Discount Rate
     tests <- disc - 1
 
+
     # Testing costs
-    cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
-    b_d  <- 0
+    test.cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
+
+    # Loop over conditions
+    treatment.cost <- 0
+    drug.cost      <- 0
+    b_d            <- 0
     for(i in 1:n)
     {
       # Compute Discounted Cost
-      cost <- cost + 
-              c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
-              c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
-              c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc]) +
-              c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
-              c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
-              c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
-              c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
+      treatment.cost <- treatment.cost +
+        c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
+        c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
+        c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc])
+      drug.cost <- drug.cost + 
+        c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
+        c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
+        c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
+        c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
       
+      # Sum fatal b events from all conditions
       b_d  <- b_d + solution[k,maps('b_d', i)]
     }
     
@@ -154,13 +161,16 @@ costs <- function(solution, params)
               d_b[i]*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step 
     }
 
-    c(dCOST       = unname(cost),
+    c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
       dQALY       = unname(pQALY-disA-disB),
       possible    = unname(pQALY),
-     # disutil_a  = unname(disA),
-     # disutil_b  = unname(disB),
       fatal_b     = unname(b_d),
-      living      = unname(life[k])
+      living      = unname(life[k]),
+      disutil_a   = unname(disA),
+      disutil_b   = unname(disB),
+      dCOST.test  = unname(test.cost),
+      dCOST.drug  = unname(drug.cost),
+      dCOST.treat = unname(treatment.cost)
       )
   })
 }
@@ -197,14 +207,14 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
   params$c_a   <- getval("A_c_",costs)       # Cost of Event A
   params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event B
   params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event B
-  params$c_tx  <- getval("rx_",costs)   # Cost of Treatment (Daily)
-  params$c_alt <- getval("alt_",costs)    # Cost of alternate treatment (Daily)
+  params$c_tx  <- getval("rx_",costs)        # Cost of Treatment (Daily)
+  params$c_alt <- getval("alt_",costs)       # Cost of alternate treatment (Daily)
   
   params$c_t   <- if(scenario %in% c("reactive-panel", "preemptive-panel"))
                   { config$global$panel_test[1] } else { config$global$single_test[1] }
                   
-  params$d_a   <- getval("A_",disutilities) # Disutility of A
-  params$d_at  <- getval("A_",durations)/365    # Duration of A in years.
+  params$d_a   <- getval("A_",disutilities)         # Disutility of A
+  params$d_at  <- getval("A_",durations)/365        # Duration of A in years.
   params$d_b   <- getval("B_Survive_",disutilities) # Disutility of B
   
   params$disc_rate <- disc_rate       # For computing discount
