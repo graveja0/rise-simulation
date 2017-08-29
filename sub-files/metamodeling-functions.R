@@ -3,6 +3,30 @@ number_ticks <- function(n) {function(limits) pretty(limits, n)} #function to de
 number_ticks_x0 <- function(n,change) {function(limits) c(pretty(limits, n),change)} #function to determine limits of axis' ticks 
 fmt <- function(){function(x) format(x,nsmall = 2,scientific = FALSE)}
 
+
+Get_ICER <- function(result) {
+  result %>% arrange(desc(dQALY)) %>% 
+    mutate(ICER = (dCOST-lead(dCOST))/(dQALY-lead(dQALY))) %>% 
+    mutate(dominated.strong = as.integer(lag(ICER)<0)) -> temp
+  
+  dominated.strong <- temp %>% select(strategy,dominated.strong)
+  dominated.strong[is.na(dominated.strong)] = 0
+  temp %>% filter(dominated.strong!=1|is.na(dominated.strong)) %>% 
+    mutate(ICER = (dCOST-lead(dCOST))/(dQALY-lead(dQALY))) %>% 
+    mutate(dominated.extended = as.integer(ICER>lag(ICER))) -> temp2 
+  
+  dominated.extended = temp2 %>% select(strategy,dominated.extended)
+  dominated.extended[is.na(dominated.extended)] = 0
+  
+  temp2 %>% filter(dominated.extended!=1|is.na(dominated.extended)) %>% 
+    mutate(ICER = (dCOST-lead(dCOST))/(dQALY-lead(dQALY))) %>% 
+    select(strategy,cost=dCOST,effectiveness=dQALY,ICER=ICER) %>% select(strategy,ICER) -> out1
+  
+  result %>% full_join(out1,"strategy") %>% full_join(dominated.strong,"strategy") %>% full_join(dominated.extended,"strategy") %>% arrange(desc(dQALY))
+}
+
+
+
 #Define offset as a new axis transformation. 
 offset_trans <- function(offset=0) {
   trans_new(paste0("offset-", format(offset)), function(x) x-offset, function(x) x+offset)
