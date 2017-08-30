@@ -357,6 +357,131 @@ TornadoAll <-function(Strategies,Parms,Outcomes){
           axis.text.x = element_text(size=txtsize))
 }
 
+
+###copy TornadoAll and add threshold values as second y-axis
+TornadoAll2 <-function(Strategies,Parms,Outcomes){
+  opt<-which.max(colMeans(Outcomes))
+  # calculate min and max vectors of the parameters (e.g., lower 2.5% and 97.5%)
+  X <- as.matrix(Parms)
+  y <- as.matrix(Outcomes[,opt])
+  Y <- as.matrix(Outcomes)
+  ymean <- mean(y)
+  n <- nrow(Parms)
+  nParams <- ncol(Parms)
+  #paramNames <- Names[seq(8,7+nParams)]
+  paramNames <- colnames(Parms)
+  Parms.sorted <- apply(Parms,2,sort,decreasing=F)#Sort in increasing order each column of Parms
+  lb <- 2.5
+  ub <- 97.5 
+  Xmean <- rep(1,nParams) %*% t(colMeans(X))
+  XMin <- Xmean
+  XMax <- Xmean
+  paramMin <- as.vector(Parms.sorted[round(lb*n/100),])
+  paramMax <- as.vector(Parms.sorted[round(ub*n/100),])
+  
+  diag(XMin) <- paramMin
+  diag(XMax) <- paramMax
+  
+  XMin <- cbind(1, XMin)
+  XMax <- cbind(1, XMax)
+  
+  X <- cbind(1,X)
+  B <- solve(t(X) %*% X) %*% t(X) %*% y
+  #install.packages("matrixStats")
+  library(matrixStats)
+  bigBeta <- solve(t(X) %*% X) %*% t(X) %*% Y
+  yMin <- rowMaxs(XMin %*% bigBeta - ymean)
+  yMax <- rowMaxs(XMax %*% bigBeta - ymean)
+  ySize <- abs(yMax - yMin) 
+  
+  rankY<- order(ySize)
+  xmin <- min(c(yMin, yMax)) + ymean
+  xmax <- max(c(yMin, yMax)) + ymean
+  
+  paramNames2 <- paste(paramNames, "[", round(paramMin,2), ",", round(paramMax,2), "]")
+  
+  strategyNames<-Strategies
+  strategyColors <- c("red","darkgreen")
+  
+  ## Polygon graphs:
+  nRect <- 0
+  x1Rect <- NULL
+  x2Rect <- NULL
+  ylevel <- NULL
+  colRect <- NULL
+  
+  for (p in 1:nParams){
+    xMean <- colMeans(X)
+    xStart = paramMin[rankY[p]]
+    xEnd = paramMax[rankY[p]]
+    xStep = (xEnd-xStart)/1000
+    for (x in seq(xStart,xEnd, by = xStep)){
+      #for each point determine which one is the optimal strategy
+      xMean[rankY[p] + 1] <- x 
+      yOutcomes <- xMean %*% bigBeta
+      yOptOutcomes <- max(yOutcomes)
+      yOpt <- which.max(yOutcomes)
+      if (x == xStart){
+        yOptOld <- yOpt
+        y1 <- yOptOutcomes
+      }
+      #if yOpt changes, then plot a rectangle for that region
+      if (yOpt != yOptOld | x == xEnd){
+        nRect <- nRect + 1
+        x1Rect[nRect] <- y1
+        x2Rect[nRect] <- yOptOutcomes
+        ylevel[nRect] <- p
+        colRect[nRect] <- strategyColors[yOptOld]
+        yOptOld <- yOpt
+        y1 <- yOptOutcomes
+      }
+    }
+  }
+  
+  ###calculate threshold
+  testx <- colMeans(X)
+  testb <- bigBeta
+  threshold <- c()
+  for (i in 1:nParams){
+    m1 <- testb[(i+1),]
+    m2 <- colSums((testx*testb)[-(i+1),])
+    xx <- -diff(m2)/diff(m1)
+    if(xx<=paramMax[i] & xx>=paramMin[i]) { #2.5%~97.5%
+      threshold[i] <- xx
+    } else {
+      threshold[i] <- NA
+    }
+  }
+  
+  txtsize <- 12
+  d=data.frame(x1=x2Rect, x2=x1Rect, y1=ylevel-0.4, y2=ylevel+0.4, t=colRect, r = ylevel)
+  ggplot(d, aes(xmin = x1, xmax = x2, ymin = y1, ymax = y2, fill = t)) +
+    ggtitle("Torando Diagram") + 
+    xlab("Expected NHB") +
+    ylab("Parameters") + 
+    geom_rect()+
+    theme_bw() + 
+    scale_y_continuous(limits = c(0.5, nParams + 0.5),breaks=seq(1:ncol(Parms)), labels=paramNames2[rankY],
+                       ###add threshold label
+                       sec.axis = sec_axis(~.,breaks=derive(),name="Threshold",labels = threshold[rankY])) +
+    #scale_y_discrete(breaks=seq(1:8), labels=paramNames2[rankY]) + 
+    scale_fill_discrete(name="Optimal\nStrategy",
+                        #breaks=c("ctrl", "trt1", "trt2"),
+                        labels=rev(strategyNames),
+                        l=50) + 
+    geom_vline(xintercept=ymean, linetype="dotted") + 
+    theme(legend.position="bottom",legend.title=element_text(size = txtsize),
+          legend.key = element_rect(colour = "black"),
+          legend.text = element_text(size = txtsize),
+          title = element_text(face="bold", size=15),
+          axis.title.x = element_text(face="bold", size=txtsize),
+          axis.title.y = element_text(face="bold", size=txtsize),
+          axis.text.y = element_text(size=txtsize),
+          axis.text.x = element_text(size=txtsize))
+}
+
+
+
 PlaneCE<-function(Strategies,Outcomes){
   ndep<-length(Strategies)*2 #Determine number of outcomes for all starteges, i.e., cost and effectiveness
   ind_c<- grep("COST",colnames(Outcomes)) #seq(1,(ndep-1),by=2) #Index to extract the costs from matrix Outcomes
