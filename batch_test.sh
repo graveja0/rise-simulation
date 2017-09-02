@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --mem=200G
-#SBATCH -t 0-48:00:00
+#SBATCH --mem=50G
+#SBATCH -t 0-36:00:00
 #SBATCH -o rise_1_%A_%a.out
 #SBATCH -e rise_1_%A_%a.err
 #SBATCH --mail-type=END,FAIL

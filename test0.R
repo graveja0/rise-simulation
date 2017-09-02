@@ -1,3 +1,4 @@
 #setwd("./rise-simulation")
-source("./batch_run.R")
-print(summary)
+ss <- "preemptive-panel"
+source("./batch_run_numerical.R")
+

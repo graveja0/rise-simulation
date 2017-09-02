@@ -1,8 +1,8 @@
-rm(list=ls())
+
 main.results <- FALSE
 pkg = list("tidyverse","deSolve","ellipse","readxl","lhs")
 invisible(lapply(pkg, require, character.only = TRUE))
-run.id.base <- "vogi-nber"
+run.id.base <- "vogi-nber2"
 
 mainDir <- "./run-data"
 subDir <- run.id.base
@@ -67,19 +67,26 @@ if (main.results) {
 # Overall Results: PSA
 ########################
 
-vN_PSA = 4
+vN_PSA = 1000
 
 library(doParallel)
 library(broom)
 ws = "nber-psa"
-if (!exists("ss")) ss <- "none"
+if (!exists("ss")) ss <- "reactive-single"
 scenario.file = "./nber-aug2017/rise-nber-parameters-vogi-psa.xlsx"
+set.seed(123)
 parameter.values <- draw.parameter.values(scenario.file =scenario.file,ws=ws,PSA.N=vN_PSA)
 config  <- parameter.values$parameter.draws 
 
+cores = parallel::detectCores()
 # None
 registerDoParallel(cores = parallel::detectCores())
 getDoParWorkers()
+cat("******************RUNNING\n******************")
+cat(ss)
+cat("\n")
+cat(cores)
+cat("\n******************\n******************")
 psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
 {
   library(deSolve)
