@@ -2,7 +2,7 @@
 main.results <- FALSE
 pkg = list("tidyverse","deSolve","ellipse","readxl","lhs")
 invisible(lapply(pkg, require, character.only = TRUE))
-run.id.base <- "vogi-nber2"
+run.id.base <- "vogi-nber-final-seed123"
 
 mainDir <- "./run-data"
 subDir <- run.id.base
