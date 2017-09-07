@@ -359,7 +359,7 @@ TornadoAll <-function(Strategies,Parms,Outcomes){
 
 
 ###copy TornadoAll and add threshold values as second y-axis
-TornadoAll2 <-function(Strategies,Parms,Outcomes){
+TornadoAll2 <-function(Strategies,Parms,Outcomes,Highlight){ #add parameter name list to highlight labels
   opt<-which.max(colMeans(Outcomes))
   # calculate min and max vectors of the parameters (e.g., lower 2.5% and 97.5%)
   X <- as.matrix(Parms)
@@ -401,7 +401,7 @@ TornadoAll2 <-function(Strategies,Parms,Outcomes){
   paramNames2 <- paste(paramNames, "[", round(paramMin,2), ",", round(paramMax,2), "]")
   
   strategyNames<-Strategies
-  strategyColors <- c("red","darkgreen")
+  strategyColors <- c("red","darkgreen","blue")
   
   ## Polygon graphs:
   nRect <- 0
@@ -409,12 +409,15 @@ TornadoAll2 <-function(Strategies,Parms,Outcomes){
   x2Rect <- NULL
   ylevel <- NULL
   colRect <- NULL
+  namRect <- NULL #add for validation
+  paraRect <- NULL #add for validation
   
   for (p in 1:nParams){
     xMean <- colMeans(X)
     xStart = paramMin[rankY[p]]
     xEnd = paramMax[rankY[p]]
     xStep = (xEnd-xStart)/1000
+    #dd <- data.frame(NULL) #used for validation
     for (x in seq(xStart,xEnd, by = xStep)){
       #for each point determine which one is the optimal strategy
       xMean[rankY[p] + 1] <- x 
@@ -426,15 +429,22 @@ TornadoAll2 <-function(Strategies,Parms,Outcomes){
         y1 <- yOptOutcomes
       }
       #if yOpt changes, then plot a rectangle for that region
-      if (yOpt != yOptOld | x == xEnd){
+      if (yOpt != yOptOld | x == seq(xStart,xEnd, by = xStep)[1001]){ #x==xEnd fails to catch 1 end point
         nRect <- nRect + 1
         x1Rect[nRect] <- y1
         x2Rect[nRect] <- yOptOutcomes
         ylevel[nRect] <- p
         colRect[nRect] <- strategyColors[yOptOld]
+        namRect[nRect] <- strategyNames[yOptOld] #add for validation
+        paraRect[nRect] <- paramNames[rankY[p]] #add for validation
         yOptOld <- yOpt
         y1 <- yOptOutcomes
       }
+      
+      ## used for validation
+      # temp <- data.frame(x=x,yOpt=yOpt,ct=nRect) %>% cbind(data.frame(yOutcomes))
+      # if(length(dd)==0) {dd <- temp } else {dd <- rbind(dd,temp)}
+      
     }
   }
   
@@ -443,32 +453,44 @@ TornadoAll2 <-function(Strategies,Parms,Outcomes){
   testb <- bigBeta
   threshold <- c()
   for (i in 1:nParams){
+    #grab metamodel estimations and calculate all intersections
     m1 <- testb[(i+1),]
     m2 <- colSums((testx*testb)[-(i+1),])
-    xx <- -diff(m2)/diff(m1)
-    if(xx<=paramMax[i] & xx>=paramMin[i]) { #2.5%~97.5%
-      threshold[i] <- xx
-    } else {
-      threshold[i] <- NA
-    }
+    xx <- (-1)*sapply(combn(m2,2,simplify = F),FUN=diff)/sapply(combn(m1,2,simplify = F),FUN=diff)
+    if(any(xx<=paramMax[i] & xx>=paramMin[i])) { #2.5%~97.5%
+      temp <- xx[xx<=paramMax[i] & xx>=paramMin[i]] #must be within parameter range
+      for(j in seq(temp)) {
+        tt <- temp[j]*m1+m2 
+        if(length(which(tt==max(tt)))==1) {temp <- temp[-j]} #drop this intersection if a single strategy dominates all
+      }
+      threshold[i] <- paste(round(temp,digits=2)) 
+    } else {threshold[i] <- "NA"}
   }
   
   txtsize <- 12
-  d=data.frame(x1=x2Rect, x2=x1Rect, y1=ylevel-0.4, y2=ylevel+0.4, t=colRect, r = ylevel)
-  ggplot(d, aes(xmin = x1, xmax = x2, ymin = y1, ymax = y2, fill = t)) +
+  d=data.frame(x1=x2Rect, x2=x1Rect, y1=ylevel-0.4, y2=ylevel+0.4, t=colRect, n=namRect, para=paraRect, r = ylevel)
+  #customize how to highlight parameters (color & font)
+  couleur <- ifelse(paramNames[rankY] %in% Highlight,"red","black")
+  ecriture <- ifelse(paramNames[rankY] %in% Highlight,"bold","plain")
+  
+  ggplot(d, aes(xmin = x1, xmax = x2, ymin = y1, ymax = y2, fill=n)) +
     ggtitle("Torando Diagram") + 
     xlab("Expected NHB") +
     ylab("Parameters") + 
     geom_rect()+
+    scale_fill_manual(
+      name="Optimal\nStrategy",
+      labels =strategyNames,
+      values =strategyColors) +
     theme_bw() + 
     scale_y_continuous(limits = c(0.5, nParams + 0.5),breaks=seq(1:ncol(Parms)), labels=paramNames2[rankY],
                        ###add threshold label
                        sec.axis = sec_axis(~.,breaks=derive(),name="Threshold",labels = threshold[rankY])) +
     #scale_y_discrete(breaks=seq(1:8), labels=paramNames2[rankY]) + 
-    scale_fill_discrete(name="Optimal\nStrategy",
-                        #breaks=c("ctrl", "trt1", "trt2"),
-                        labels=rev(strategyNames),
-                        l=50) + 
+    # scale_fill_discrete(name="Optimal\nStrategy",
+    #                     #breaks=c("ctrl", "trt1", "trt2"),
+    #                     labels=rev(strategyNames),
+    #                     l=50) + 
     geom_vline(xintercept=ymean, linetype="dotted") + 
     theme(legend.position="bottom",legend.title=element_text(size = txtsize),
           legend.key = element_rect(colour = "black"),
@@ -476,8 +498,10 @@ TornadoAll2 <-function(Strategies,Parms,Outcomes){
           title = element_text(face="bold", size=15),
           axis.title.x = element_text(face="bold", size=txtsize),
           axis.title.y = element_text(face="bold", size=txtsize),
-          axis.text.y = element_text(size=txtsize),
-          axis.text.x = element_text(size=txtsize))
+          axis.text.y = element_text(size=txtsize,color=couleur,face=ecriture), 
+          #if not want to highlight right y axis, add axis.text.y.right specification
+          axis.text.x = element_text(size=txtsize)) 
+  
 }
 
 
