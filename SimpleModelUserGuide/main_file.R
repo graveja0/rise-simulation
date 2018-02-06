@@ -24,7 +24,7 @@ initialize_patient <- function(traj, inputs)
         traj %>%
                 seize("time_in_model") %>%
                 set_attribute("aAgeInitial", function() inputs$vAge) %>%
-                set_attribute("aAge", function(attrs) attrs[['aAgeInitial']]) %>%
+                set_attribute("aAge", function() get_attribute(env, 'aAgeInitial')) %>%
                 set_attribute("aGender", function() inputs$vGender) %>%
                 set_attribute("aGene", function() sample(1:2,1,prob=c(inputs$vGene,1-inputs$vGene))) %>% #1 - targeted, 2 - not
                 set_attribute("aGenotyped", 0) %>% # 0 - not, 1 - yes
@@ -65,12 +65,12 @@ cleanup_on_termination <- function(traj)
         traj %>% 
                 release("time_in_model") %>% 
                 branch(
-                        function(attrs) attrs[["eventA"]]+1,
+                        function() get_attribute(env, "eventA")+1,
                         continue=rep(TRUE,2),
                         trajectory() %>% timeout(0),
                         trajectory() %>% 
                                 branch(
-                                        function(attrs) attrs[["aDrug"]],
+                                        function() get_attribute(env, "aDrug"),
                                         continue=rep(TRUE,2),
                                         trajectory() %>% release("rx"),
                                         trajectory() %>% release("alt")
@@ -113,7 +113,7 @@ event_registry <- list(
              reactive      = FALSE),
         list(name          = "Terminate at time horizonb",
              attr          = "aTerminate",
-             time_to_event = function(attrs,inputs) 365.0*inputs$vHorizon,
+             time_to_event = function(inputs) 365.0*inputs$vHorizon,
              func          = terminate_simulation,
              reactive      = FALSE)
 )
