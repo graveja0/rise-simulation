@@ -1,25 +1,5 @@
 library(simmer)
 
-  ##############################################
- ##
-## Helper functions to make code simpler
-##
-exec <- function(traj, func)
-{
-  traj %>%
-  timeout(function(attrs) 0)
-}
-
-print_attrs <- function(traj)
-{
-  exec(traj, function(attrs) print(attrs))
-}
-
-write_attrs <- function(traj,file=patients)
-{
-  exec(traj, function(attrs) patients = rbind.fill(file,as.data.frame(attrs)))
-}
-
 
   ##############################################
  ##
@@ -116,20 +96,18 @@ process_events <- function(traj, env, inputs)
   args <- lapply(event_registry,FUN=function(e) {
     #print(e$name)   # Good for debugging event loading
     trajectory(e$name) %>%
-      #timeout(function(attrs) {cat("executing ",e$name,"\n"); 0}) %>%
       e$func(inputs) %>%
-      #timeout(function(attrs) {cat("executed ",e$name,"\n"); 0}) %>%
       set_attribute(e$attr, function() {now(env)+e$time_to_event(inputs)})
   })
   args$".trj"    <- traj
-  args$option    <- function(attrs) next_event()$id
+  args$option    <- function() next_event()$id
   args$continue  <- rep(TRUE,length(event_registry))
   
   traj <- do.call(branch, args)
   
   # Apply reactive events
   lapply(event_registry[sapply(event_registry, function(x) x$reactive)], FUN=function(e){
-    traj <- set_attribute(traj, e$attr, function(attrs) {now(env)+e$time_to_event(inputs)})
+    traj <- set_attribute(traj, e$attr, function() {now(env)+e$time_to_event(inputs)})
   })
   
   traj
