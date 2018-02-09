@@ -2,10 +2,10 @@
 # library(diagram)
 
 rm(list=ls())
-# fake risks for now
 # to add discounting
-# to add time dependency for secular death
-# to add strategy
+# to add time dependency for secular death (pD)
+# how to incorporate population heterogeneity (e.g. gene prevalence)
+# https://pierucci.org/heemod/articles/g_heterogeneity.html
 
 # states: 
 # H
@@ -16,27 +16,51 @@ rm(list=ls())
 # BDtrans: B death, onetime cost for BD
 # D: both secular death and B death
 
+# parameters
+param <- define_parameters(
+        costA = 10000,
+        disuA = 0.05,
+        costDrug = 365*0.5,
+        costAlt = 365*5,
+        costBS = 25000,
+        disuB = 0.02,
+        costBD = 15000,
+        
+        pA = rescale_prob(p=0.1,from=10),
+        pB = 0.02,
+        fatalB = 0.05,
+        pBS = pB*(1-fatalB),
+        pBD = pB*fatalB,
+        rr = 0.7,
+        pD = 0.01  #time-varying
+        
+)
+
 #transition matrix
-mat_stand <- define_transition(
+mat_standard <- define_transition(
         state_names = c("H","Atrans","BFree","BStrans","BS","BDtrans","D"),
-        C,0.5,0,0,0,0,0.1,
-        0,0,C,0.2,0,0.05,0.1,
-        0,0,C,0.2,0,0.05,0.1,
-        0,0,0,0,C,0,0.1,
-        0,0,0,0,C,0,0.1,
+        C,pA,0,0,0,0,pD,
+        0,0,C,pBS,0,pBD,pD,
+        0,0,C,pBS,0,pBD,pD,
+        0,0,0,0,C,0,pD,
+        0,0,0,0,C,0,pD,
         0,0,0,0,0,0,1,
         0,0,0,0,0,0,1
 )
 
-plot(mat_stand)
+mat_genotype <- define_transition(
+        state_names = c("H","Atrans","BFree","BStrans","BS","BDtrans","D"),
+        C,pA,0,0,0,0,pD,
+        0,0,C,rr*pBS,0,rr*pBD,pD,
+        0,0,C,rr*pBS,0,rr*pBD,pD,
+        0,0,0,0,C,0,pD,
+        0,0,0,0,C,0,pD,
+        0,0,0,0,0,0,1,
+        0,0,0,0,0,0,1
+)
 
-# param
-costA = 10000
-disuA = 0.05
-costDrug = 365*0.5
-costBS = 25000
-disuB = 0.02
-costBD = 15000
+
+plot(mat_standard)
 
 
 #states
@@ -46,22 +70,30 @@ state_H <- define_state(
 )
 
 state_Atrans <- define_state(
-        cost = costA+costDrug,
+        cost = dispatch_strategy(
+                standard=costA+costDrug,
+                genotype=costA+costAlt),
         QALY = 1-disuA
 )
 
 state_BFree <- define_state(
-        cost = costDrug,
+        cost = dispatch_strategy(
+                standard=costDrug,
+                genotype=costAlt),
         QALY = 1
 )
 
 state_BStrans <- define_state(
-        cost = costBS+costDrug,
+        cost = dispatch_strategy(
+                standard=costBS+costDrug,
+                genotype=costBS+costAlt),
         QALY = 1-disuB
 )
 
 state_BS <- define_state(
-        cost = costDrug,
+        cost = dispatch_strategy(
+                standard=costDrug,
+                genotype=costAlt),
         QALY = 1-disuB
 )
 
@@ -76,8 +108,19 @@ state_D <- define_state(
 )
 
 # binding 
-strat_stand <- define_strategy(
-        transition = mat_stand,
+strat_standard <- define_strategy(
+        transition = mat_standard,
+        H=state_H,
+        Atrans=state_Atrans,
+        BFree=state_BFree,
+        BStrans=state_BStrans,
+        BS=state_BS,
+        BDtrans=state_BDtrans,
+        D=state_D
+)
+
+strat_genotype <- define_strategy(
+        transition = mat_genotype,
         H=state_H,
         Atrans=state_Atrans,
         BFree=state_BFree,
@@ -89,7 +132,9 @@ strat_stand <- define_strategy(
 
 # run
 res_mod <- run_model(
-        strat_stand,
+        standard=strat_standard,
+        genotype=strat_genotype,
+        parameters = param,
         cycles = 10,
         cost = cost,
         effect = QALY
