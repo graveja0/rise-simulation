@@ -257,3 +257,15 @@ res_mod <- run_model(
         cost = cost,
         effect = utility
 )
+
+pop <- data.frame(
+        age=c(70,80),
+        sex=c(1,0),
+        .weights=c(80,20)
+)
+
+res_h <- update(res_mod, newdata = pop)
+
+res_mod$run_model
+res_h$updated_model
+res_h$combined_model$run_model

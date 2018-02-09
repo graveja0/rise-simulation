@@ -31,9 +31,10 @@ param <- define_parameters(
         fatalB = 0.05,
         pBS = pB*(1-fatalB),
         pBD = pB*fatalB,
-        rr = 0.7,
-        pD = 0.01  #time-varying
-        
+        pD = 0.01,  #time-varying
+
+        gene = 1, #0 or 1
+        rr = 1-0.3*gene     
 )
 
 #transition matrix
@@ -139,3 +140,16 @@ res_mod <- run_model(
         cost = cost,
         effect = QALY
 )
+
+### add gene prevalence
+pop <- data.frame(
+        gene=c(0,1),
+        .weights=c(80,20)
+)
+
+res_h <- update(res_mod, newdata = pop)
+
+# compare
+res_mod$run_model
+res_h$updated_model
+res_h$combined_model$run_model
