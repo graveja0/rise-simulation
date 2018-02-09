@@ -3,9 +3,6 @@
 
 rm(list=ls())
 # to add discounting
-# to add time dependency for secular death (pD)
-# how to incorporate population heterogeneity (e.g. gene prevalence)
-# https://pierucci.org/heemod/articles/g_heterogeneity.html
 
 # states: 
 # H
@@ -17,6 +14,13 @@ rm(list=ls())
 # D: both secular death and B death
 
 # parameters
+load("raw_mortality.rda") #raw annual prob secular death, source data to fit death in simmer and numerical model.
+
+probSD <- function(x) {
+        dt <- lt %>% filter(Age==x, gender=="female")
+        return(dt$prob)
+}
+
 param <- define_parameters(
         costA = 10000,
         disuA = 0.05,
@@ -31,7 +35,11 @@ param <- define_parameters(
         fatalB = 0.05,
         pBS = pB*(1-fatalB),
         pBD = pB*fatalB,
-        pD = 0.01,  #time-varying
+        
+        age_init = 40,
+        age = age_init + markov_cycle - 1,
+
+        pD = map_dbl(age, function(x) lt$prob[lt$Age==x & lt$gender=="female"]),
 
         gene = 1, #0 or 1
         rr = 1-0.3*gene     
@@ -140,6 +148,10 @@ res_mod <- run_model(
         cost = cost,
         effect = QALY
 )
+
+
+p <- data.frame(res_mod$eval_strategy_list$standard$parameters) #check parameters
+
 
 ### add gene prevalence
 pop <- data.frame(
