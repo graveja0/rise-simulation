@@ -17,11 +17,6 @@ rm(list=ls())
 # parameters
 load("raw_mortality.rda") #raw annual prob secular death, source data to fit death in simmer and numerical model.
 
-probSD <- function(x) {
-        dt <- lt %>% filter(Age==x, gender=="female")
-        return(dt$prob)
-}
-
 doom <- function(value,cage) {
         ifelse(cage<max(lt$Age),value,0)
 } # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
@@ -36,7 +31,7 @@ param <- define_parameters(
         costBD = 15000,
         
         age_init = 40,
-        age = age_init + markov_cycle - 1,
+        age = age_init + markov_cycle,
         
         pD = map_dbl(age, function(x) doom(lt$prob[lt$Age==x & lt$gender=="female"],x)),
         
@@ -47,7 +42,10 @@ param <- define_parameters(
         pBD = pB*fatalB,
 
         gene = 1, #0 or 1
-        rr = 1-0.3*gene     
+        rr = 1-0.3*gene,
+        
+        #just for genotype strategy
+        cDgenotype = map_dbl(gene, function(x) ifelse(x==0,costDrug,costAlt))
 )
 
 #transition matrix
@@ -86,7 +84,7 @@ state_H <- define_state(
 state_Atrans <- define_state(
         cost = discount(dispatch_strategy(
                 standard=costA+costDrug,
-                genotype=costA+costAlt
+                genotype=costA+cDgenotype
         ), dr),
         QALY = discount(1-disuA,dr)
 )
@@ -94,7 +92,7 @@ state_Atrans <- define_state(
 state_BFree <- define_state(
         cost = discount(dispatch_strategy(
                 standard=costDrug,
-                genotype=costAlt
+                genotype=cDgenotype
         ), dr),
         QALY = discount(1,dr)
 )
@@ -102,7 +100,7 @@ state_BFree <- define_state(
 state_BStrans <- define_state(
         cost = discount(dispatch_strategy(
                 standard=costBS+costDrug,
-                genotype=costBS+costAlt
+                genotype=costBS+cDgenotype
         ), dr),
         QALY = discount(1-disuB,dr)
 )
@@ -110,7 +108,7 @@ state_BStrans <- define_state(
 state_BS <- define_state(
         cost = discount(dispatch_strategy(
                 standard=costDrug,
-                genotype=costAlt
+                genotype=cDgenotype
         ), dr),
         QALY = discount(1-disuB,dr)
 )
