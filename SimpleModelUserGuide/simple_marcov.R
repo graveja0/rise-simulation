@@ -1,5 +1,6 @@
 # library(heemod)
 # library(diagram)
+# library(purrr)
 
 rm(list=ls())
 # to add discounting
@@ -21,6 +22,10 @@ probSD <- function(x) {
         return(dt$prob)
 }
 
+doom <- function(value,cage) {
+        ifelse(cage<max(lt$Age),value,0)
+} # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
+
 param <- define_parameters(
         costA = 10000,
         disuA = 0.05,
@@ -30,16 +35,16 @@ param <- define_parameters(
         disuB = 0.02,
         costBD = 15000,
         
-        pA = rescale_prob(p=0.1,from=10),
-        pB = 0.02,
-        fatalB = 0.05,
-        pBS = pB*(1-fatalB),
-        pBD = pB*fatalB,
-        
         age_init = 40,
         age = age_init + markov_cycle - 1,
-
-        pD = map_dbl(age, function(x) lt$prob[lt$Age==x & lt$gender=="female"]),
+        
+        pD = map_dbl(age, function(x) doom(lt$prob[lt$Age==x & lt$gender=="female"],x)),
+        
+        pA = map_dbl(age, function(x) doom(rescale_prob(p=0.1,from=10),x)),
+        pB = map_dbl(age, function(x) doom(0.02,x)),
+        fatalB = map_dbl(age, function(x) doom(0.05,x)),
+        pBS = pB*(1-fatalB),
+        pBD = pB*fatalB,
 
         gene = 1, #0 or 1
         rr = 1-0.3*gene     
@@ -71,43 +76,47 @@ mat_genotype <- define_transition(
 
 plot(mat_standard)
 
-
+dr <- 0.03 # discounting rate
 #states
 state_H <- define_state(
         cost = 0,
-        QALY = 1
+        QALY = discount(1,dr)
 )
 
 state_Atrans <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costA+costDrug,
-                genotype=costA+costAlt),
-        QALY = 1-disuA
+                genotype=costA+costAlt
+        ), dr),
+        QALY = discount(1-disuA,dr)
 )
 
 state_BFree <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costDrug,
-                genotype=costAlt),
-        QALY = 1
+                genotype=costAlt
+        ), dr),
+        QALY = discount(1,dr)
 )
 
 state_BStrans <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costBS+costDrug,
-                genotype=costBS+costAlt),
-        QALY = 1-disuB
+                genotype=costBS+costAlt
+        ), dr),
+        QALY = discount(1-disuB,dr)
 )
 
 state_BS <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costDrug,
-                genotype=costAlt),
-        QALY = 1-disuB
+                genotype=costAlt
+        ), dr),
+        QALY = discount(1-disuB,dr)
 )
 
 state_BDtrans <- define_state(
-        cost = costBD,
+        cost = discount(costBD,dr),
         QALY = 0
 )
 
@@ -144,7 +153,7 @@ res_mod <- run_model(
         standard=strat_standard,
         genotype=strat_genotype,
         parameters = param,
-        cycles = 10,
+        cycles = 100,
         cost = cost,
         effect = QALY
 )
@@ -162,6 +171,6 @@ pop <- data.frame(
 res_h <- update(res_mod, newdata = pop)
 
 # compare
-res_mod$run_model
-res_h$updated_model
-res_h$combined_model$run_model
+# res_mod$run_model # old model
+# res_h$updated_model # separate models and weights
+res_h$combined_model$run_model # combined model
