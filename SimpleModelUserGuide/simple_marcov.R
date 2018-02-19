@@ -21,6 +21,10 @@ doom <- function(value,cage) {
         ifelse(cage<max(lt$Age),value,0)
 } # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
 
+doom2 <- function(value,cage) {
+        ifelse(cage<=max(lt$Age),value,0)
+} # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
+
 param <- define_parameters(
         costA = 10000,
         disuA = 0.05,
@@ -33,13 +37,17 @@ param <- define_parameters(
         age_init = 40,
         age = age_init + markov_cycle,
         
-        pD = map_dbl(age, function(x) doom(lt$prob[lt$Age==x & lt$gender=="female"],x)),
+        pD = map_dbl(age, function(x) doom2(lt$prob[lt$Age==x & lt$gender=="female"],x)),
         
-        pA = map_dbl(age, function(x) doom(rescale_prob(p=0.1,from=10),x)),
-        pB = map_dbl(age, function(x) doom(0.02,x)),
-        fatalB = map_dbl(age, function(x) doom(0.05,x)),
-        pBS = pB*(1-fatalB),
-        pBD = pB*fatalB,
+        # pA = map_dbl(age, function(x) doom(rescale_prob(p=0.1,from=10),x)),
+        # pB = map_dbl(age, function(x) doom(0.02,x)),
+        # fatalB = map_dbl(age, function(x) doom(0.05,x)),
+        # pBS = pB*(1-fatalB),
+        # pBD = pB*fatalB,
+        pA = 0,
+        pB = 0,
+        pBS = 0,
+        pBD = 0,
 
         gene = 1, #0 or 1
         rr = 1-0.3*gene,
@@ -78,7 +86,7 @@ dr <- 0.03 # discounting rate
 #states
 state_H <- define_state(
         cost = 0,
-        QALY = discount(1,dr)
+        QALY = 1 #discount(1,dr)
 )
 
 state_Atrans <- define_state(
@@ -151,7 +159,7 @@ res_mod <- run_model(
         standard=strat_standard,
         genotype=strat_genotype,
         parameters = param,
-        cycles = 100,
+        cycles = 90,
         cost = cost,
         effect = QALY
 )
@@ -161,14 +169,14 @@ p <- data.frame(res_mod$eval_strategy_list$standard$parameters) #check parameter
 
 
 ### add gene prevalence
-pop <- data.frame(
-        gene=c(0,1),
-        .weights=c(80,20)
-)
-
-res_h <- update(res_mod, newdata = pop)
-
-# compare
-# res_mod$run_model # old model
-# res_h$updated_model # separate models and weights
-res_h$combined_model$run_model # combined model
+# pop <- data.frame(
+#         gene=c(0,1),
+#         .weights=c(80,20)
+# )
+# 
+# res_h <- update(res_mod, newdata = pop)
+# 
+# # compare
+# # res_mod$run_model # old model
+# # res_h$updated_model # separate models and weights
+# res_h$combined_model$run_model # combined model
