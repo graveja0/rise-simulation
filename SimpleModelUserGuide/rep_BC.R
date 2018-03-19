@@ -12,11 +12,13 @@ library(readxl)
 
 ### Typos
 #1."Dead" column, ovarian cancer death used bc chart
-#2."Cost" column, ooph cost did not multiply the cost
+#2."Cost" column, missing ooph cost, cancer death cost inconsistent with counts 
+# (counts took last-year cancer counts and current-year mortality, costs here took current-year cancer counts)
 
 ### System
-#1. Confusing cost and QALY computation
-#2. No transition from no intervention to intervention in Markov model
+#1. Confusing cost and QALY computation (QALY can match)
+#2. No transition from no intervention to intervention in Markov model but count in QALY 
+#3. Precision of inputs
 
 rm(list=ls())
 ################################
@@ -63,16 +65,6 @@ p_cancer <- function(cancer,age,which) { #transition probabilities table
         return(r[which])
 }
 
-#gene-based cancer rr w/o intervention
-# rr_cancer <- function(gene) { #parameters table
-#         if(gene %in% c(3,6,9,10)) rr=1
-#         if(gene %in% c(2,5,8)) rr=1.1
-#         if(gene == 1) rr=15
-#         if(gene == 4) rr=5
-#         if(gene == 7) rr=1.5
-#         return(rr)
-# }
-
 #secular death rate
 secular <- function(age) {
         if(age>100) 1
@@ -105,7 +97,7 @@ param <- define_parameters(
         
         psd = map_dbl(age,~secular(.x)), #secular death
         pbcd = map_dbl(age,~p_cancer(cancer="bc",age=.x,which=2)), #breast cancer death
-        pocd = map_dbl(age,~p_cancer(cancer="bc",age=.x,which=2)), #ovarian cancer death (typo in excel)
+        pocd = map_dbl(age,~p_cancer(cancer="bc",age=.x,which=2)), #ovarian cancer death (typo in excel, should be "oc")
         # ppostd = map_dbl(psd,function(x) min(1,x)),
         
         unone = 0.95,
@@ -153,20 +145,25 @@ r <- 0.03
 state_mast <- define_state(cost=0,QALY=discount(uint,r))
 state_ooph <- define_state(cost=0,QALY=discount(uint,r))
 state_duet <- define_state(cost=0,QALY=discount(uint,r))
-# state_mast <- define_state(cost=as.integer(state_time==1)*cmast,QALY=uint-as.integer(state_time==1)*dmast)
-# state_ooph <- define_state(cost=as.integer(state_time==1)*cooph,QALY=uint-as.integer(state_time==1)*dooph)
-# state_duet <- define_state(cost=as.integer(state_time==1)*(cmast+cooph),QALY=uint-as.integer(state_time==1)*dduet)
-state_hp_plp <- define_state(cost=discount(cmast*0.5,r),QALY=discount(unone-0.25*0.2,r))
-state_hp_vus <- define_state(cost=discount(cmast*0.1,r),QALY=discount(unone-0.05*0.2,r))
-state_mp_plp <- define_state(cost=discount(cmast*0.5,r),QALY=discount(unone-0.25*0.2,r))
-state_mp_vus <- define_state(cost=discount(cmast*0.1,r),QALY=discount(unone-0.05*0.2,r))
-state_lp_plp <- define_state(cost=discount(cmast*0.5,r),QALY=discount(unone-0.25*0.2,r))
-state_lp_vus <- define_state(cost=discount(cmast*0.1,r),QALY=discount(unone-0.05*0.2,r))
+#this part was messed up in excel versione (revised version as comments)
+# state_hp_plp <- define_state(cost=discount(0.5*(cmast+cooph),r),QALY=discount(unone-0.25*0.2,r))
+# state_hp_vus <- define_state(cost=discount(0.1*(cmast+cooph),r),QALY=discount(unone-0.05*0.2,r))
+# state_mp_plp <- define_state(cost=discount(0.5*(cmast+cooph),r),QALY=discount(unone-0.25*0.2,r))
+# state_mp_vus <- define_state(cost=discount(0.1*(cmast+cooph),r),QALY=discount(unone-0.05*0.2,r))
+# state_lp_plp <- define_state(cost=discount(0.5*(cmast+cooph),r),QALY=discount(unone-0.25*0.2,r))
+# state_lp_vus <- define_state(cost=discount(0.1*(cmast+cooph),r),QALY=discount(unone-0.05*0.2,r))
+state_hp_plp <- define_state(cost=discount(0.5*cmast,r),QALY=discount(unone-0.25*0.2,r))
+state_hp_vus <- define_state(cost=discount(0.1,r),QALY=discount(unone-0.05*0.2,r))
+state_mp_plp <- define_state(cost=discount(0.5*cmast,r),QALY=discount(unone-0.25*0.2,r))
+state_mp_vus <- define_state(cost=discount(0.1,r),QALY=discount(unone-0.05*0.2,r))
+state_lp_plp <- define_state(cost=discount(0.5*cmast,r),QALY=discount(unone-0.25*0.2,r))
+state_lp_vus <- define_state(cost=discount(0.1,r),QALY=discount(unone-0.05*0.2,r))
+
 state_np <- define_state(cost=0,QALY=discount(unone,r))
 state_breast <- define_state(cost=discount(cbc,r),QALY=discount(ucancer,r))
 state_ovarian <- define_state(cost=discount(coc,r),QALY=discount(ucancer,r))
 state_postcancer <- define_state(cost=discount(cpostc,r),QALY=discount(upostc,r))
-state_cancerd <- define_state(cost=discount(cdeath,r),QALY=0)
+state_cancerd <- define_state(cost=discount(cdeath,r),QALY=0) #messed up in excel, not sure how to replicate here
 # state_dead <- define_state(cost=discount(as.integer(state_time==1)*cdeath,r),QALY=0)
 state_dead <- define_state(cost=0,QALY=0)
 strat <- define_strategy(
