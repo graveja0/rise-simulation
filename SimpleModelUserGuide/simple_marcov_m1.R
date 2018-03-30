@@ -1,6 +1,6 @@
-# library(heemod)
-# library(diagram)
-# library(purrr)
+library(heemod)
+library(diagram)
+library(purrr)
 
 rm(list=ls())
 # to add discounting
@@ -86,7 +86,7 @@ dr <- 0.03 # discounting rate
 #states
 state_H <- define_state(
         cost = 0,
-        QALY = 1 #discount(1,dr)
+        QALY = discount(1,dr)
 )
 
 state_Atrans <- define_state(
