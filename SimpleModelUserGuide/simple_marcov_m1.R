@@ -1,11 +1,9 @@
-# library(heemod)
-# library(diagram)
+library(heemod)
+library(diagram)
+library(purrr)
 
 rm(list=ls())
 # to add discounting
-# to add time dependency for secular death (pD)
-# how to incorporate population heterogeneity (e.g. gene prevalence)
-# https://pierucci.org/heemod/articles/g_heterogeneity.html
 
 # states: 
 # H
@@ -17,6 +15,16 @@ rm(list=ls())
 # D: both secular death and B death
 
 # parameters
+load("raw_mortality.rda") #raw annual prob secular death, source data to fit death in simmer and numerical model.
+
+doom <- function(value,cage) {
+        ifelse(cage<max(lt$Age),value,0)
+} # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
+
+doom2 <- function(value,cage) {
+        ifelse(cage<=max(lt$Age),value,0)
+} # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
+
 param <- define_parameters(
         costA = 10000,
         disuA = 0.05,
@@ -26,15 +34,26 @@ param <- define_parameters(
         disuB = 0.02,
         costBD = 15000,
         
-        pA = rescale_prob(p=0.1,from=10),
-        pB = 0.02,
-        fatalB = 0.05,
-        pBS = pB*(1-fatalB),
-        pBD = pB*fatalB,
-        pD = 0.01,  #time-varying
+        age_init = 40,
+        age = age_init + markov_cycle,
+        
+        pD = map_dbl(age, function(x) doom2(lt$prob[lt$Age==x & lt$gender=="female"],x)),
+        
+        # pA = map_dbl(age, function(x) doom(rescale_prob(p=0.1,from=10),x)),
+        # pB = map_dbl(age, function(x) doom(0.02,x)),
+        # fatalB = map_dbl(age, function(x) doom(0.05,x)),
+        # pBS = pB*(1-fatalB),
+        # pBD = pB*fatalB,
+        pA = 0,
+        pB = 0,
+        pBS = 0,
+        pBD = 0,
 
         gene = 1, #0 or 1
-        rr = 1-0.3*gene     
+        rr = 1-0.3*gene,
+        
+        #just for genotype strategy
+        cDgenotype = map_dbl(gene, function(x) ifelse(x==0,costDrug,costAlt))
 )
 
 #transition matrix
@@ -63,43 +82,47 @@ mat_genotype <- define_transition(
 
 plot(mat_standard)
 
-
+dr <- 0.03 # discounting rate
 #states
 state_H <- define_state(
         cost = 0,
-        QALY = 1
+        QALY = discount(1,dr)
 )
 
 state_Atrans <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costA+costDrug,
-                genotype=costA+costAlt),
-        QALY = 1-disuA
+                genotype=costA+cDgenotype
+        ), dr),
+        QALY = discount(1-disuA,dr)
 )
 
 state_BFree <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costDrug,
-                genotype=costAlt),
-        QALY = 1
+                genotype=cDgenotype
+        ), dr),
+        QALY = discount(1,dr)
 )
 
 state_BStrans <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costBS+costDrug,
-                genotype=costBS+costAlt),
-        QALY = 1-disuB
+                genotype=costBS+cDgenotype
+        ), dr),
+        QALY = discount(1-disuB,dr)
 )
 
 state_BS <- define_state(
-        cost = dispatch_strategy(
+        cost = discount(dispatch_strategy(
                 standard=costDrug,
-                genotype=costAlt),
-        QALY = 1-disuB
+                genotype=cDgenotype
+        ), dr),
+        QALY = discount(1-disuB,dr)
 )
 
 state_BDtrans <- define_state(
-        cost = costBD,
+        cost = discount(costBD,dr),
         QALY = 0
 )
 
@@ -136,20 +159,24 @@ res_mod <- run_model(
         standard=strat_standard,
         genotype=strat_genotype,
         parameters = param,
-        cycles = 10,
+        cycles = 90,
         cost = cost,
         effect = QALY
 )
 
+
+p <- data.frame(res_mod$eval_strategy_list$standard$parameters) #check parameters
+
+
 ### add gene prevalence
-pop <- data.frame(
-        gene=c(0,1),
-        .weights=c(80,20)
-)
-
-res_h <- update(res_mod, newdata = pop)
-
-# compare
-res_mod$run_model
-res_h$updated_model
-res_h$combined_model$run_model
+# pop <- data.frame(
+#         gene=c(0,1),
+#         .weights=c(80,20)
+# )
+# 
+# res_h <- update(res_mod, newdata = pop)
+# 
+# # compare
+# # res_mod$run_model # old model
+# # res_h$updated_model # separate models and weights
+# res_h$combined_model$run_model # combined model

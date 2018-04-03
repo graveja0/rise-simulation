@@ -258,6 +258,10 @@ res_mod <- run_model(
         effect = utility
 )
 
+
+# incorporate population heterogeneity
+# https://pierucci.org/heemod/articles/g_heterogeneity.html
+
 pop <- data.frame(
         age=c(70,80),
         sex=c(1,0),
