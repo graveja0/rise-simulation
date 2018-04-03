@@ -13,7 +13,7 @@ inst_rate <- function(percent, timeframe)
   - log(1-percent) / timeframe
 }
 
-times <- seq(0, 80, by=2/365)
+times <- seq(0, 80, by=1/365)
 
 params       <- list()
 
