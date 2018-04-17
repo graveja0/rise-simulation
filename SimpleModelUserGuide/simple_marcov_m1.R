@@ -39,15 +39,11 @@ param <- define_parameters(
         
         pD = map_dbl(age, function(x) doom2(lt$prob[lt$Age==x & lt$gender=="female"],x)),
         
-        # pA = map_dbl(age, function(x) doom(rescale_prob(p=0.1,from=10),x)),
-        # pB = map_dbl(age, function(x) doom(0.02,x)),
-        # fatalB = map_dbl(age, function(x) doom(0.05,x)),
-        # pBS = pB*(1-fatalB),
-        # pBD = pB*fatalB,
-        pA = 0,
-        pB = 0,
-        pBS = 0,
-        pBD = 0,
+        pA = map_dbl(age, function(x) doom(rescale_prob(p=0.1,from=10),x)),
+        pB = map_dbl(age, function(x) doom(0.02,x)),
+        fatalB = map_dbl(age, function(x) doom(0.05,x)),
+        pBS = pB*(1-fatalB),
+        pBD = pB*fatalB,
 
         gene = 1, #0 or 1
         rr = 1-0.3*gene,
@@ -169,14 +165,14 @@ p <- data.frame(res_mod$eval_strategy_list$standard$parameters) #check parameter
 
 
 ### add gene prevalence
-# pop <- data.frame(
-#         gene=c(0,1),
-#         .weights=c(80,20)
-# )
-# 
-# res_h <- update(res_mod, newdata = pop)
-# 
-# # compare
-# # res_mod$run_model # old model
-# # res_h$updated_model # separate models and weights
-# res_h$combined_model$run_model # combined model
+pop <- data.frame(
+        gene=c(0,1),
+        .weights=c(80,20)
+)
+
+res_h <- update(res_mod, newdata = pop)
+
+# compare
+# res_mod$run_model # old model
+# res_h$updated_model # separate models and weights
+res_h$combined_model$run_model # combined model

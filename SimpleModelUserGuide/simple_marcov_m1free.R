@@ -1,51 +1,45 @@
 library(heemod)
-library(diagram)
 library(tidyverse)
-
-rm(list=ls())
-
-# states: 
-# H
-# Atrans: one year disu for A, lifetime drug cost
-# BF: B free, lifetime drug cost
-# BStrans: B survive, onetime cost for BS, lifetime disu for B, lifetime drug cost
-# BS: B survive, lifetime disu for B, lifetime drug cost
-# BDtrans: B death, onetime cost for BD
-# D: both secular death and B death
+library(flexsurv)
 
 # parameters
 load("raw_mortality.rda") #raw annual prob secular death, source data to fit death in simmer and numerical model.
 
-doom <- function(value,cage) {
-        ifelse(cage<max(lt$Age),value,0)
-} # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
+#secular death rate
+gompertz_ratio <- function(t0, t1, shape, rate)
+{
+        r <- (pgompertz(t1, shape, rate) - pgompertz(t0, shape, rate)) / (1 - pgompertz(t0, shape, rate))
+        if(is.na(r)) r=1
+        return(r)
+}
 
-doom2 <- function(value,cage) {
-        ifelse(cage<=max(lt$Age),value,0)
-} # Once age reaches the maximum, pD becomes 1 and all other probs need to put 0.
+# Gompertz model for 40yr female
+shape <- 0.1007511
+rate  <- 0.0008370717
 
-doom3 <- function(value) {
-        ifelse(value>0,rescale_prob(p=value,to=1/12),0)
+# Once secular death mortablity reaches 1, all other probs need to put 0. 
+cap_max <- function(value,sd) {
+        ifelse(sd==1,0,value)
 }
 
 param <- define_parameters(
         costA = 10000,
         disuA = 0.05,
-        costDrug = 365*0.5/12,
-        costAlt = 365*5/12,
+        costDrug = 365*0.5/interval,
+        costAlt = 365*5/interval,
         costBS = 25000,
         disuB = 0.02,
         costBD = 15000,
         
         age_init = 40,
-        age = age_init + markov_cycle,
+        t1 = model_time/interval, #model_time starts with 1
+        t0 = (model_time-1)/interval,
         
-        sd = map_dbl(age, function(x) doom2(lt$prob[lt$Age==x & lt$gender=="female"],x)),
-        pD = map_dbl(sd, ~doom3(value=.x)),
+        pD = map2_dbl(t0,t1,~gompertz_ratio(t0=.x,t1=.y,shape=shape,rate=rate)),
+        pA = map_dbl(pD,~cap_max(value=rescale_prob(p=0.1,from=10,to=1/interval),sd=.x)),
+        pB = map_dbl(pD,~cap_max(value=rescale_prob(p=0.02,from=1,to=1/interval),sd=.x)),
         
-        pA = map_dbl(age, function(x) doom(rescale_prob(p=0.1,from=10,to=1/12),x)),
-        pB = map_dbl(age, function(x) doom(rescale_prob(p=0.02,from=1,to=1/12),x)),
-        fatalB = map_dbl(age, function(x) doom(0.05,x)),
+        fatalB = 0.05,
         pBS = pB*(1-fatalB),
         pBD = pB*fatalB,
 
@@ -77,7 +71,7 @@ mat_genotype <- define_transition(
 
 plot(mat_standard)
 
-dr <- rescale_discount_rate(0.03,from=12,to=1) # discounting rate
+dr <- rescale_discount_rate(0.03,from=interval,to=1) # discounting rate
 #states
 state_H <- define_state(
         cost = 0,
@@ -89,7 +83,7 @@ state_A <- define_state(
                 standard=costA*ifelse(state_time<=1,1,0)+costDrug,
                 genotype=costA*ifelse(state_time<=1,1,0)+cDgenotype
         ), dr),
-        QALY = discount(1-disuA*ifelse(state_time<=12,1,0),dr)
+        QALY = discount(1-disuA*ifelse(state_time<=interval,1,0),dr)
 )
 
 
@@ -135,10 +129,10 @@ res_mod <- run_model(
         standard=strat_standard,
         genotype=strat_genotype,
         parameters = param,
-        cycles = 24,
+        cycles = 85*interval,
         cost = cost,
         effect = QALY,
-        state_time_limit=12,
+        state_time_limit=interval,
         method="beginning"
 )
 
@@ -157,4 +151,12 @@ res_h <- update(res_mod, newdata = pop)
 # compare
 # res_mod$run_model # old model
 # res_h$updated_model # separate models and weights
-res_h$combined_model$run_model # combined model
+res_h$combined_model$run_model %>% mutate(ICER=diff(cost)/diff(QALY)*interval)
+
+c1 <- res_h$combined_model$eval_strategy_list$standard$counts
+c2 <- res_h$combined_model$eval_strategy_list$genotype$counts
+v1 <- res_h$combined_model$eval_strategy_list$standard$values
+v2 <- res_h$combined_model$eval_strategy_list$genotype$values
+
+cp <- rbind(c1 %>% mutate(r=rownames(.),s=0), c2 %>% mutate(r=rownames(.),s=1))
+cv <- rbind(v1 %>% mutate(r=rownames(.),s=0), v2 %>% mutate(r=rownames(.),s=1))
