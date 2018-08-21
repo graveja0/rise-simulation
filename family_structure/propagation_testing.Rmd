@@ -1,0 +1,122 @@
+---
+title: "Statistics of Propagation Testing"
+author: "Shawn Garbett"
+date: "March 5, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+```
+
+## Research Question 
+
+The big question is given known rates of a genetic disease, treatment and non-treatment costs and rates of inheritance what variables drive cost effectiveness of propagation testing? I.e, upon diagnosis of a disease, how much benefit could be gained by testing relatives?
+
+This leads to a more practical question of how does one simulate or estimate these costs in a practical manner? It is a potentially complex question, that involves statistical graphs of family relationships with inheritance patterns inside that structure. This document will explore how much information is required to explore these statistics, and attempt to find the simplest possible approach to examining such a simulation.
+
+One immediate decision is needed and is how much depth to carry propagation testing in a family graph? The easiest and most tractable approach is to simulate 1 degree removed in a family structure. The effects of continued propagation through $\infty$ degrees is more difficult and propbably would not be realized immediately upon implementation of any program.
+
+## Available Data
+
+We will use the Panel Study of Income Dynamics (PSID) data source for estimating immediate family structures. PSID is a nationally representative household panel survey started from 1968. PSID families are followed over time, and households formed by their children and grand children are also invited to join the survey, which allows us to construct genealogical linkages between survey respondents even if they are not living in the same household. More information about PSID can be found: https://psidonline.isr.umich.edu/default.aspx.
+
+### Description of the family dataset
+
+The sample population of this dataset is all survey respondents in the 2013 PSID, a total of 24,759 individuals from 9,040 households. For each individual respondent, survey ID and age of their parents, children, and siblings are included if available. The 1968 ID uniquely identifies survey individuals across years and a zero value means missing. Parents, children, or siblings who were known to have deceased in or before 2013 were coded missing in their 1968 IDs. The 2013 family ID identifies current household unit in the 2013 PSID. Age variables were consolidated from various data files. 
+
+The weighted mean age of the sample population is 37.47. On average, each individual of the sample has 1.32 child and 1.37 sibling.
+
+## Premier Pas (First Steps)
+ 
+The first simulation step is to assume an inheritance rate or structure of some form. For this pass we use autosomal dominate inheritance. We assume that each individual has been diagnosed with an inheritable condition and will derive the probability that their 1st order family linkages are tested for the condition.
+
+```{r, cache=TRUE}
+x <- read.csv("psid_ch13.csv")
+
+N <- length(x$v1)
+
+inh_rate <- 0.5 # rate of 1 inheritance 1 family unit away
+
+# Let's assume everyone in family set was diagnosed with some genetic condition and
+# estimate propagation rates
+
+sim <- do.call(rbind, lapply(1:N, function(i) {
+  y <- x[i,]
+  result <- data.frame()
+  if(!is.na(y$agem) && y$agem > 0)
+    result <- rbind(result, data.frame(sex="F", age=y$agem, prob_d=inh_rate))
+  if(!is.na(y$agef) && y$agef > 0)
+    result <- rbind(result, data.frame(sex="M", age=y$agef, prob_d=inh_rate))
+  if(!is.na(y$num_chd) && y$num_chd > 0)
+  {
+    for(j in 1:y$num_chd)
+    {
+      age <- y[,paste0("age_chd",j)]
+      sex <- y[,paste0("sex_chd",j)]
+      if(!is.na(sex) && !is.na(age))
+      {
+        result <- rbind(result, data.frame(sex=ifelse(sex == 1, "M", "F"), age=age, prob_d=inh_rate))
+      }
+    }
+  }
+  
+  if(!is.na(y$num_sib) && y$num_sib > 0)
+  {
+    for(j in 1:y$num_sib)
+    {
+      age <- y[,paste0("age_sib",j)]
+      sex <- y[,paste0("sex_sib",j)]
+      typ <- y[,paste0("sibtype",j)]
+      if(!is.na(sex) && !is.na(age) && !is.na(typ) && typ > 0 && typ < 6)
+      {
+        # Change this based on genetic inheritance mechanism
+        rate <- if(typ == 1)     inh_rate else  # Same father and mother
+                if(typ == 2) 0.5*inh_rate else  # Same mother
+                if(typ == 3) 0.5*inh_rate else  # Same father
+                if(typ == 4) 0.5*inh_rate else  # Same mother
+                             0.5*inh_rate       # Same father
+        result <- rbind(result, data.frame(sex=ifelse(sex == 1, "M", "F"), age=age, prob_d=rate))
+      }
+    }
+  }
+  
+  # Finish up with source
+  if(length(result$sex) > 0)
+  {
+    result$src_row <- i
+    result$src_sex <- ifelse(y$sex == 1, "M", "F")
+    result$src_age <- y$agei
+  }
+  
+  result
+}))
+
+head(sim, 30)
+```
+
+The probability of disease based on testing 1 degree way is estimated. From this we can examine what the effect of continuing propagation to step-siblings on the probability of disease state based on the known probabilities of step siblings in a family structure.
+
+```{r}
+byage <- aggregate(sim$prob_d, by=list(age=sim$age), FUN=mean)
+
+estimate <- loess(x~age, byage, span=1/3)
+
+plot(byage$age, byage$x, main="Probability of Disease 1 Degree Removed", xlab="Age", ylab="Probability")
+lines(predict(estimate), col='red')
+```
+
+The red line is a local polynomial regression fit. The prevelance of step sibilings is most pronounced for this population's individuals just under 20 years of age.
+
+```{r}
+hist(sim$age, main="Age at Testing", xlab="Age", freq=FALSE)
+```
+
+## Fundamentals
+
+With the construction of these fundamental statistics one is now equipped to do estimation of propagation effects of genetic testing. The question then becomes what population is being simulated?
+
+For example, a population of individuals recently diagnosed with Lynch syndrome. How effective would propagation testing be? From the above statistics, we can contruct the odds of testing familial members. One could even do age based adjustments. I.e., if an individual had Lynch syndrome it has a certain rate of becoming known based on age, which could already be known in a family. In fact, one could envision a targetted testing campaign based on known diagnosis in charts and use the above statistics to estimate effectiveness of testing.
+
+
