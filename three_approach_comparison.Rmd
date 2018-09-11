@@ -1,0 +1,1153 @@
+---
+title: "three_approach_comparison"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Discrete Event Simulation Using R "Simmer" Package
+### model setup
+```{r des, message=FALSE,warning=FALSE,results='hide'}
+rm(list=ls())
+setwd("~/Desktop/simple-test")
+### Single Drug - low Weibull
+pkg = list("simmer",
+           "data.table",
+           "plyr",
+           "dplyr",
+           "tidyr",
+           "reshape2",
+           "ggplot2",
+           "downloader",
+           "msm",
+           "quantmod",
+           "data.table",
+           "deSolve",
+           "flexsurv")
+invisible(lapply(pkg, require, character.only = TRUE))
+
+###
+###default inputs 
+
+inputs <- list(
+        
+        ###1. parameters used in simulation
+        #global control
+        vHorizon  = 10, #how many years to simulate
+        vN = 10000, #how 
+        
+        #demographics (can be constant value or draw from distribution/dataset)
+        vAge = 40,
+        vGender = 1,
+        vGene = 0.2,
+        
+        #event risks
+        #Example: Event A happens at a 10% rate over 10 years
+        vRiskA = 0.1,
+        vDurationA = 10, 
+        
+        #Example: Event B happens at a 2% rate over 1 year with a case fatality of 5%
+        vRiskB = 0.02,
+        vDurationB = 1,
+        vFatalB = 0.05,
+        #Example: alternative drug users have a relative risk of 0.7
+        vRR_B = 0.7,
+        
+        
+        #strategies
+        #Example: default setting is none-none (no genetic testing);
+        #Other combinations include: none-single (single gene testing at the time of indication),
+        #                            none-panel (panel gene testing at the time of indication),
+        #                            panel-none (panel gene testing at the beginning of the simulation)
+        vPreemptive = "None", # "None" or "Panel"
+        vReactive = "None", # "None" or "Single" or "Panel"
+        
+        #physician bvehavior
+        vProbabilityOrder = 0.5, #the probability for doctors to order and make use of a test at the time of indication
+        vProbabilityRead = 0.5, #the probability for doctors to use information from existing test at the time of indication
+        
+        
+        ###2.parameters used in post-simulation computation (event name needs to match counters)
+        disutilities = list(
+                A = 0.05, 
+                B_Survive = 0.1,
+                B_Death  = 1,
+                secular_death = 1
+        ),
+        
+        #here only list event that temporarily affects utility 
+        durations = list(
+                A = 365
+        ),
+        
+        #differentiate events that permanently or temporarily affect utility
+        #1 - temporary (need to specify in "durations" section above)
+        #0 - permanent (do not record in "durations" section above)
+        type = list(
+                #Example: Event A incurs an one-time cost and temporary disutility,
+                #so we set "A" as temporary to calcualte the disutility, 
+                #and "A_c" as permanent to calculate the cost.
+                #Need to record both events in "counters" session and event file. 
+                A = 0,
+                A_c = 0, 
+                
+                B_Survive = 0,
+                B_Death = 0,
+                secular_death = 0
+        ),
+        
+        costs = list(
+                A_c = 10000, #separate event to capture A cost, note that "A" is not present here to avoid double counting
+                B_Survive = 25000, 
+                B_Death = 15000,
+                rx= 0.5, #daily cost  
+                alt=5, #daily cost
+                single_test=100
+        )
+        
+)
+
+
+###
+###Assign initial attributes
+epsilon <- 0.000000000001 #use for zero-risk
+
+
+initialize_patient <- function(traj, inputs)
+{
+        traj %>%
+                seize("time_in_model") %>%
+                set_attribute("aAgeInitial", function() inputs$vAge) %>%
+                set_attribute("aAge", function() get_attribute(env, 'aAgeInitial')) %>%
+                set_attribute("aGender", function() inputs$vGender) %>%
+                set_attribute("aGene", function() sample(1:2,1,prob=c(inputs$vGene,1-inputs$vGene))) %>% #1 - targeted, 2 - not
+                set_attribute("aGenotyped", 0) %>% # 0 - not, 1 - yes
+                set_attribute("eventA",0) %>%  # Event A 0=not experienced, 1=experienced
+                set_attribute("eventB",0) %>%  # Event B 0=not experienced, 1=experienced
+                set_attribute("aDrug",1) %>% # 1 - usual drug, 2 - alt 
+                set_attribute("aOrdered_test", 0)  %>%    # Did a physician order a test this time 0 - no, 1 - yes
+                set_attribute("aControlOrder", 0) %>% #control ordering test 0 - no, 1 - yes
+                set_attribute("aControlRead", 0) #control reading test 0 - no, 1 - yes
+}
+
+###
+###some global functions
+
+#preemptive strategy (this function is called in the main loop file and execute right after initialize patient and events)
+preemptive_strategy <- function(traj, inputs)
+{
+        # Note this doesn't have to use branch, because it's a global that every trajectory gets
+        if        (inputs$vPreemptive == "None"     )
+        {
+                traj # Do nothing
+        } else if (inputs$vPreemptive == "Single"    )
+        {
+                traj %>% single_test(inputs) 
+        } else stop("Unhandled Preemptive Strategy")
+}
+
+single_test <- function(traj, inputs)
+{
+        traj %>% 
+                set_attribute('aGenotyped', 1)  %>%
+                mark("single_test")
+}
+
+# Cleanup 
+cleanup_on_termination <- function(traj)
+{
+        traj %>% 
+                release("time_in_model") %>% 
+                branch(
+                        function() get_attribute(env, "eventA")+1,
+                        continue=rep(TRUE,2),
+                        trajectory() %>% timeout(0),
+                        trajectory() %>% 
+                                branch(
+                                        function() get_attribute(env, "aDrug"),
+                                        continue=rep(TRUE,2),
+                                        trajectory() %>% release("rx"),
+                                        trajectory() %>% release("alt")
+                                )) 
+}
+
+terminate_simulation <- function(traj, inputs)
+{
+        traj %>%
+                branch(
+                        function() 1, 
+                        continue=FALSE,
+                        trajectory() %>% cleanup_on_termination()
+                )
+}
+
+
+###
+###Event functions
+## Secular Death, Weibull Model
+source('./age-gompertz.R')
+
+# Given attributes of a patient (trajectory), it returns in days 
+# how long till the patient would die a secular death.
+
+days_till_death <- function(inputs)
+{
+        age       <- get_attribute(env,"aAge")
+        death_age <- ageAtDeath(age, get_attribute(env,"aGender"))
+        
+        return(365*(death_age-age))
+}
+
+# Given a trajectory, modify as needed when a secular
+# death occurs.
+#
+# In this case, it marks a counter and terminates 
+# the trajectory. A branch is required, even though
+# it doesn't branch to force the termination.
+secular_death <- function(traj, inputs)
+{
+        traj %>% branch(
+                function() 1,
+                continue=c(FALSE), # False is patient death, had to use a branch to force termination
+                trajectory("Secular Death") %>% mark("secular_death") %>% terminate_simulation()
+        )
+}
+
+
+###
+###Define events (need to register event registry and counters)
+
+days_till_A <- function(inputs)
+{
+        # Relative Risk
+        rr <- 1
+        
+        # Baseline Risk
+        days <- 365*inputs$vDurationA
+        
+        rate <- (- (log ( 1 - inputs$vRiskA)*rr) / days)
+        
+        t2e <- rexp(1, rate)
+        
+        if(get_attribute(env,"eventA") != 0) t2e <- 365*inputs$vHorizon + 1 #prevent reoccurence of event A
+        
+        return(t2e)
+} 
+
+
+#for all genotyped patients through preemptive strategies, physician can choose to use or ignore the test results
+#under reactive strategies, physician can also choose to order test for those not genotyped
+A_reactive_strategy <- function(traj, inputs)
+{
+        if(inputs$vReactive == "None") 
+        {
+                traj #
+        } else if (inputs$vReactive == "Single")
+        {
+                traj %>%
+                        branch(
+                                function() get_attribute(env,"aGenotyped")+1,
+                                continue=c(TRUE, TRUE),
+                                trajectory("not have") %>%
+                                        branch(
+                                                function() get_attribute(env,"aControlOrder")+1, #use probability of ordering test
+                                                continue=c(TRUE,TRUE),
+                                                trajectory("not order") %>% timeout(0), 
+                                                trajectory("order reactive test") %>% 
+                                                        set_attribute("aGenotyped", 1) %>% mark("single_test") %>% set_attribute("aOrdered_test", 1)
+                                        ), 
+                                trajectory("have test results") %>%  timeout(0)
+                        )
+        } else stop("Unhandled Reactive Strategy")
+}
+
+prescribe_drug <- function(traj,inputs) 
+{
+        traj %>%
+                set_attribute("aDrug", function() 
+                        if(get_attribute(env,"aGene")==1 & get_attribute(env,"aGenotyped")==1 & 
+                           (get_attribute(env,"aOrdered_test") == 1 | get_attribute(env,"aControlRead")==1)) 
+                        {return(2)} else {return(1)}) %>%
+                branch(
+                        function() get_attribute(env,"aDrug"),
+                        continue=rep(TRUE,2),
+                        trajectory() %>% seize("rx"),
+                        trajectory() %>% seize("alt")
+                )
+}
+
+event_A = function(traj, inputs) 
+{
+        traj %>% 
+                #physician behavior
+                set_attribute("aControlOrder",function() sample(0:1,1,prob=c(1- inputs$vProbabilityOrder,  inputs$vProbabilityOrder))) %>%
+                set_attribute("aControlRead",function() sample(0:1,1,prob=c(1- inputs$vProbabilityRead,  inputs$vProbabilityRead))) %>% 
+                #different implementation of genetic testing based on strategies and physician behavioral parameters
+                A_reactive_strategy(inputs) %>%
+                #assign different treatment based on genetic type and whether tested or not 
+                prescribe_drug(inputs) %>%
+                #event
+                mark("A") %>% mark("A_c") %>%
+                set_attribute("eventA",1) %>% #record occurance of A
+                #adjust clock for event B
+                set_attribute("attB", function() now(env) + days_till_B(inputs)) 
+}
+
+days_till_B <- function(inputs) 
+{
+        # Relative Risk
+        rr <- if(get_attribute(env,"eventA")==1 & get_attribute(env,"aDrug")==2) inputs$vRR_B else 1.0
+        
+        # Baseline Risk
+        days <- 365*inputs$vDurationB
+        
+        rate <- (- (log ( 1 - inputs$vRiskB)*rr) / days)
+        
+        t2e <- rexp(1, rate)
+        
+        if(get_attribute(env,"eventA") != 1 || get_attribute(env,"eventB") != 0)
+                t2e <- 365*inputs$vHorizon + 1
+        
+        return(t2e)
+}
+
+event_B = function(traj, inputs) 
+{
+        traj %>%
+                mark("B") %>%
+                set_attribute("eventB", 1) %>%
+                branch(
+                        function() sample(1:2,1,prob=c(inputs$vFatalB,1-inputs$vFatalB)),
+                        continue = c(FALSE, TRUE),
+                        trajectory("Die")  %>% mark("B_Death") %>% terminate_simulation(),
+                        trajectory("Survive")  %>%  mark("B_Survive") 
+                ) 
+}
+
+
+
+
+
+###
+###Event registry
+event_registry <- list(
+        list(name          = "Secular Death",
+             attr          = "aSecularDeathTime",
+             time_to_event = days_till_death,
+             func          = secular_death,
+             reactive      = FALSE),
+        list(name          = "Event A",
+             attr          = "attA",
+             time_to_event = days_till_A,
+             func          = event_A,
+             reactive      = FALSE),
+        list(name          = "Event B",
+             attr          = "attB",
+             time_to_event = days_till_B,
+             func          = event_B,
+             reactive      = FALSE),
+        list(name          = "Terminate at time horizonb",
+             attr          = "aTerminate",
+             time_to_event = function(inputs) 365.0*inputs$vHorizon,
+             func          = terminate_simulation,
+             reactive      = FALSE)
+)
+
+###
+###Counters (cost and QALY related inputs need to match counter name)
+counters <- c(
+        "time_in_model", 
+        "A",
+        "A_c", #separate event to capture A cost
+        "B",
+        "B_Survive",
+        "B_Death",
+        "treat",
+        "secular_death",
+        "rx",
+        "alt",
+        "single_test"
+)
+
+
+##############################################
+##
+## Helper functions for managing counters
+##
+## Hopefully, no modification required.
+##
+
+# Create the counters, takes a list
+create_counters <- function(env, counters)
+{
+        sapply(counters, FUN=function(counter)
+        {
+                env <- add_resource(env, counter, Inf, 0)
+        })
+        
+        env
+}
+
+# Mark a counter
+mark <- function(traj, counter)
+{
+        traj               %>%
+                seize(counter,1)   %>%
+                timeout(0)         %>%
+                release(counter,1)
+}
+
+##############################################
+##
+## Helper functions for managing events
+##
+## Hopefully, no modification required.
+##
+assign_events <- function(traj, inputs)
+{
+        sapply(event_registry, FUN=function(event)
+        {
+                traj <- set_attribute(traj, event$attr, function()
+                {
+                        event$time_to_event(inputs)
+                })
+        })
+        traj
+}
+
+# Find the next event based on time
+next_event <- function()
+{
+        event_time <- Inf
+        event      <- NA
+        id         <- 0
+        for(i in 1:length(event_registry))
+        {
+                e <- event_registry[[i]]
+                tmp_time   <- get_attribute(env,e$attr)
+                if(tmp_time < event_time)
+                {
+                        event      <- e
+                        event_time <- tmp_time
+                        id         <- i
+                }
+        }
+        
+        return(list(event=event, event_time=event_time, id=id))
+}
+
+# Process events in main loop
+process_events <- function(traj, env, inputs)
+{
+        # Find the next event from possible events, and timeout (wait) till that moment
+        traj <- timeout(traj, function()
+        {
+                # Determine next up
+                ne <- next_event()
+                event      <- ne[['event']]
+                event_time <- ne[['event_time']]
+                
+                #cat(" Next up => ",event$name,"\n")
+                #cat("            waiting", event_time-now(env), '\n')
+                
+                # Wait the clock time for the nearest event, minus now()
+                event_time - now(env)
+        })
+        
+        # Age them by clock
+        traj <- set_attribute(traj,'aAge',function() get_attribute(env,"aAgeInitial")+(now(env)/365.0))
+        
+        # Create a handler for every possible event, using their
+        # list position as the branch number
+        # This will determine the id of the next event
+        # Call it's modification function
+        # and then update it's next time to event
+        args <- lapply(event_registry,FUN=function(e) {
+                #print(e$name)   # Good for debugging event loading
+                trajectory(e$name) %>%
+                        e$func(inputs) %>%
+                        set_attribute(e$attr, function() {now(env)+e$time_to_event(inputs)})
+        })
+        args$".trj"    <- traj
+        args$option    <- function() next_event()$id
+        args$continue  <- rep(TRUE,length(event_registry))
+        
+        traj <- do.call(branch, args)
+        
+        # Apply reactive events
+        lapply(event_registry[sapply(event_registry, function(x) x$reactive)], FUN=function(e){
+                traj <- set_attribute(traj, e$attr, function() {now(env)+e$time_to_event(inputs)})
+        })
+        
+        traj
+}
+
+##############################################
+##
+## MAIN LOOP
+##
+## This should not require modification
+## This creates a patient simulation (trajectory)
+## 
+## It uses a branch in a manner to prevent the
+## rollback from looking further up the stack
+## of the event loop. 
+simulation <- function(env, inputs)
+{
+        trajectory("Patient")     %>%
+                initialize_patient(inputs)     %>%
+                assign_events(inputs)          %>%
+                preemptive_strategy(inputs)    %>% 
+                branch( # Used branch, to prevent rollback from looking inside event loop function
+                        function() 1,
+                        continue=TRUE,
+                        trajectory("main_loop") %>% process_events(env, inputs)
+                ) %>% 
+                rollback(amount=1, times=100) # Process up to 100 events per person
+}
+
+###
+###Execution functions
+exec.simulation <- function(inputs)
+{
+        set.seed(12345) ###random seed makes simulation replicable 
+        env  <<- simmer("Simple")
+        traj <- simulation(env, inputs)
+        env %>% create_counters(counters)
+        
+        env %>%
+                add_generator("patient", traj, at(rep(0, inputs$vN)), mon=2) %>%
+                run(365*inputs$vHorizon+1) %>% # Simulate just past horizon
+                wrap()
+        
+        get_mon_arrivals(env, per_resource = T)
+}
+
+
+
+#cost and QALY
+####### Costs & QALYs
+options("scipen"=100, "digits"=6)
+annual_discount_rate <- 0.03 ###Modify as needed
+
+cont_discount_rate   <- -log(1-annual_discount_rate) # Yearly Time Scale
+select <- dplyr::select
+
+yr <- 365.25
+
+discount_value = function(value,ar=annual_discount_rate,A,B)
+{
+        r <- (1 + ar)^(1/yr)-1
+        (value/r)*(exp(-r*A)-exp(-r*B))
+}
+
+discount2 = function(value,ar=annual_discount_rate,A) value / (1+ar)^(A/yr)
+
+cost.qaly <- function(raw,inputs) 
+{
+        arrivals <- raw %>%  mutate(name = paste0(name,"_",replication))
+        # Make all resources a factor (this allows for null events to still get summaries)
+        arrivals$resource <- factor(arrivals$resource, counters)
+        
+        # Adjust all event end times from the inputs$durations
+        mapply(function(value, name){
+                arrivals[arrivals$resource == name,]$end_time <<-arrivals[arrivals$resource == name,]$start_time + value
+        }, value=inputs$durations, name=names(inputs$durations) )
+        
+        # Truncate to end of study or life
+        end_times <- arrivals[arrivals$resource == 'time_in_model',]
+        arrivals$end_time <- pmin(arrivals$end_time, 
+                                  plyr::join(arrivals[,c("name","end_time")], end_times[,c("name","end_time")], by="name", match="first")[,3])
+        
+        # Compute total activity times
+        arrivals$activity_time <- arrivals$end_time - arrivals$start_time
+        
+        
+        # Computes discounted rate of time
+        arrivals$discounted_time <- discount_value(value=1,A=arrivals$start_time,B=arrivals$end_time)
+        
+        # Compute Event base cost map
+        idx <- function(str) {as.numeric(factor(str, levels=levels(arrivals$resource)))}
+        base_cost_map <- rep(0, nlevels(arrivals$resource))
+        sapply(names(inputs$costs), FUN=function(name){
+                base_cost_map[idx(name)] <<- inputs$costs[[name]]    
+        })
+        
+        # Compute Disutility cost map
+        base_disutility_map <- rep(0, nlevels(arrivals$resource))
+        sapply(names(inputs$disutilities), FUN=function(name){
+                base_disutility_map[idx(name)] <<- inputs$disutilities[[name]]    
+        })
+        names(base_disutility_map) = levels(arrivals$resource)
+        
+        arrivals$cost <- base_cost_map[as.numeric(arrivals$resource)]
+        arrivals$discounted_cost <- ifelse(arrivals$activity_time>0,
+                                           discount_value(value=arrivals$cost,A=arrivals$start_time,B=arrivals$end_time),
+                                           discount2(value = arrivals$cost,A=arrivals$start_time))
+        
+        arrivals$disutility = base_disutility_map[arrivals$resource]
+        
+        type <- data.frame(resource=names(inputs$type),type=unlist(inputs$type),row.names=NULL)
+        qaly1 <- arrivals %>% group_by(name) %>% 
+                arrange(start_time,desc(end_time)) %>% dplyr::mutate(utility = ifelse(row_number()==1,1,NA)) %>% filter(disutility>0 | utility>0) %>% #cross out events that have no impact on utility
+                select(name,resource,start_time,end_time,activity_time,disutility) %>%
+                merge(type,by="resource",all.x=TRUE) %>% #attach type of events: temp vs. permanent disutility
+                dplyr::mutate(us=disutility,ue=disutility*(-type)) %>%  #us/ue stand for disutility at start/end time: temp event will add back disutility at end time
+                select(name,start_time,end_time,us,ue,resource,type) %>% melt(id.vars=c("name","resource","us","ue","type")) %>% arrange(value) %>% #separate and spread start/end time
+                dplyr::mutate(disutility=ifelse(variable=="start_time",us,ue)) %>% arrange(name,value,desc(variable)) %>% #match disutility with start/end time
+                group_by(name) %>% mutate(time=lead(value)) %>% dplyr::mutate(dtime=ifelse(row_number()>1,time-lag(time),time)) %>% filter(!is.na(dtime)) %>% 
+                filter(!(type==0 & dtime==0)) #For events that permanently reduce utility, this deletes double counts of the event and prevent double counting of disutility 
+        #For temp event, we need to keep two records (start & end) in the datasets in order to adding back disutility at end time
+        
+        qaly2 <- qaly1 %>% mutate(cum1=ifelse(type==1 | is.na(type),0,disutility)) %>% #For permanent events (type==0), pass disutility to accumulate
+                group_by(name) %>% mutate(temp_u=1-cumsum(cum1)) %>% 
+                dplyr::mutate(cum2=ifelse(type==0 | is.na(type),0,disutility)) %>% mutate(utility=temp_u-cumsum(cum2)) %>% #For temp events, deduct accumulative disutility from temp_u
+                filter(utility>0) #do not count negative/zero utility in qaly computation
+        
+        qaly.i <- qaly2 %>% select(name, value, time, utility) %>%
+                dplyr::mutate(qaly.d = discount_value(utility,A=value,B=time)) #discounted QALY for each period of time 
+        
+        QALY = qaly.i %>% group_by(name) %>% dplyr::summarise(dQALY = sum(qaly.d)/yr)
+        COST = arrivals %>% filter(discounted_cost>0) %>% group_by(name,resource) %>% dplyr::summarise(dCOST = sum(discounted_cost)) 
+        avgsum <- data.frame(    dQALY = sum(QALY$dQALY)/inputs$vN,
+                                 dCOST = sum(COST$dCOST)/inputs$vN)
+        return(avgsum)
+}
+
+
+```
+
+### test run
+```{r run1, message=FALSE,warning=FALSE}
+# main simulation
+results <- NULL
+attributes <- NULL
+
+#overwrite default inputs
+inputs$vHorizon <- 10
+inputs$vN <- 1000
+inputs$vProbabilityOrder <- 1
+inputs$vProbabilityRead <- 1
+
+#run and compile the simulation
+for(preemptive in "None")
+{
+        for(reactive in c("None","Single"))
+        {
+                if(preemptive == "Single" && reactive == "Single") {next}
+                inputs$vPreemptive <- preemptive
+                inputs$vReactive   <- reactive
+                cat("Running ", preemptive,"-", reactive,"\n")
+                run <- exec.simulation(inputs) #obtain trajectory data
+                run$preemptive <- preemptive
+                run$reactive <- reactive
+                # at <- arrange(get_mon_attributes(env),name,key,time) #obtain attributes data
+                # at$preemptive <- preemptive
+                # at$reactive <- reactive
+                
+                if(is.null(results)) { results <- run } else  {results <- rbind(results, run)}
+                # if(is.null(attributes)) { attributes <- at } else  {attributes <- rbind(attributes, at)}
+        }}
+
+#event counts
+DT <- data.table(results)
+summ <- DT[, .N, by = list(resource,preemptive,reactive)]
+summ 
+
+
+# cost and qaly
+s1 <- cost.qaly(subset(results,preemptive=="None"&reactive=="None"),inputs) %>% mutate(strategy="None")
+s2 <- cost.qaly(subset(results,preemptive=="None"&reactive=="Single"),inputs) %>% mutate(strategy="Reactive Single")
+
+sum_costs <- rbind(s1,s2) %>% mutate(ICER = (dCOST-dCOST[1])/(dQALY-dQALY[1])) 
+sum_costs
+
+```
+
+## Markov Cohort Simulation Using R "Heemod" Package
+### model setup
+```{r markov, message=FALSE,warning=FALSE,results='hide'}
+pkg = list("heemod","dplyr","purrr","flexsurv")
+invisible(lapply(pkg, require, character.only = TRUE))
+
+exec.markov <- function(interval) {
+        
+        #secular death rate
+        gompertz_ratio <- function(t0, t1, shape, rate)
+        {
+                r <- (pgompertz(t1, shape, rate) - pgompertz(t0, shape, rate)) / (1 - pgompertz(t0, shape, rate))
+                if(is.na(r)) r=1
+                return(r)
+        }
+        
+        # Gompertz model for 40yr female
+        shape <- 0.1007511
+        rate  <- 0.0008370717
+        
+        # Once secular death mortablity reaches 1, all other probs need to put 0. 
+        cap_max <- function(value,sd) {
+                ifelse(value+sd>1,1-sd,value)
+        }
+        
+        param <- define_parameters(
+                costA = 10000,
+                disuA = 0.05,
+                costDrug = 365*0.5/interval,
+                costAlt = 365*5/interval,
+                costBS = 25000,
+                disuB = 0.02,
+                costBD = 15000,
+                
+                age_init = 40,
+                t1 = model_time/interval, #model_time starts with 1
+                t0 = (model_time-1)/interval,
+                
+                pD = map2_dbl(t0,t1,~gompertz_ratio(t0=.x,t1=.y,shape=shape,rate=rate)),
+                pA = map_dbl(pD,~cap_max(value=rescale_prob(p=0.1,from=10,to=1/interval),sd=.x)),
+                pB = map_dbl(pD,~cap_max(value=rescale_prob(p=0.02,from=1,to=1/interval),sd=.x)),
+                
+                fatalB = 0.05,
+                pBS = pB*(1-fatalB),
+                pBD = pB*fatalB,
+                
+                gene = 1, #0 or 1
+                rr = 1-0.3*gene,
+                
+                #just for genotype strategy
+                cDgenotype = map_dbl(gene, function(x) ifelse(x==0,costDrug,costAlt))
+        )
+        
+        #transition matrix
+        mat_standard <- define_transition(
+                state_names = c("H","A","BS","BD","D"),
+                C,pA,0,0,pD,
+                0,C,pBS,pBD,pD,
+                0,0,C,0,pD,
+                0,0,0,1,0,
+                0,0,0,0,1
+        )
+        
+        mat_genotype <- define_transition(
+                state_names = c("H","A","BS","BD","D"),
+                C,pA,0,0,pD,
+                0,C,rr*pBS,rr*pBD,pD,
+                0,0,C,0,pD,
+                0,0,0,1,0,
+                0,0,0,0,1
+        )
+        
+        dr <- rescale_discount_rate(0.03,from=interval,to=1) # discounting rate
+        #states
+        state_H <- define_state(
+                cost = 0,
+                QALY = discount(1,dr)
+        )
+        
+        state_A <- define_state(
+                cost = discount(dispatch_strategy(
+                        standard=costA*ifelse(state_time<=1,1,0)+costDrug,
+                        genotype=costA*ifelse(state_time<=1,1,0)+cDgenotype
+                ), dr),
+                QALY = discount(1-disuA*ifelse(state_time<=interval,1,0),dr)
+        )
+        
+        
+        state_BS <- define_state(
+                cost = discount(dispatch_strategy(
+                        standard=costBS*ifelse(state_time<=1,1,0)+costDrug,
+                        genotype=costBS*ifelse(state_time<=1,1,0)+cDgenotype
+                ), dr),
+                QALY = discount(1-disuB,dr)
+        )
+        
+        state_BD <- define_state(
+                cost = discount(costBD*ifelse(state_time<=1,1,0),dr),
+                QALY = 0
+        )
+        
+        state_D <- define_state(
+                cost = 0,
+                QALY = 0
+        )
+        
+        # binding 
+        strat_standard <- define_strategy(
+                transition = mat_standard,
+                H=state_H,
+                A=state_A,
+                BS=state_BS,
+                BD=state_BD,
+                D=state_D
+        )
+        
+        strat_genotype <- define_strategy(
+                transition = mat_genotype,
+                H=state_H,
+                A=state_A,
+                BS=state_BS,
+                BD=state_BD,
+                D=state_D
+        )
+        
+        # run
+        res_mod <- run_model(
+                standard=strat_standard,
+                genotype=strat_genotype,
+                parameters = param,
+                cycles = 85*interval,
+                cost = cost,
+                effect = QALY,
+                state_time_limit=interval,
+                method="life-table"
+        )
+        
+        ### add gene prevalence
+        pop <- data.frame(
+                gene=c(0,1),
+                .weights=c(80,20)
+        )
+        
+        res_h <- update(res_mod, newdata = pop)
+        
+        # compare
+        re <- res_h$combined_model$run_model %>% dplyr::mutate(ICER=diff(cost)/diff(QALY)*interval) %>% data.frame()
+        return(re)
+        
+}
+```
+
+### test run
+```{r run2, message=FALSE,warning=FALSE}
+interval <- 1
+ot <- exec.markov(interval)
+ot <- ot %>% select(strategy=.strategy_names,cost,QALY) %>% mutate(cost=cost/1000,QALY=QALY/(1000*interval))
+ot$ICER <- c(NA,(ot$cost[2]-ot$cost[1])/(ot$QALY[2]-ot$QALY[1]))
+ot
+```
+
+# Differential Equation Method
+
+Reusing the N condition simple model, we just run it for a single condition.
+```{r deq_def}
+library(deSolve)
+
+
+# Gompertz model of secular for 40yr female
+shape <- 0.1007511
+rate  <- 0.0008370717
+
+# Using exact gompertz approximation from DES
+f_40yr_drate <- function(t) rate*exp(shape*t)
+
+inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
+
+# This is for doing numberical integration of a set of numbers at an even interval
+# FAR BETTER than half-cycle correction or life-table methods
+alt_simp_coef <- function(i)
+{
+  if (i < 8) stop("Invalid Simpson coefficient size")
+   
+  # pg.117 4.1.14, Numerical Recipes in C, 1st edition
+  c(17/48, 50/48, 43/48, 49/48, rep(1, i-8), 49/48, 43/48, 50/48, 17/48) 
+}
+
+
+key <- list(
+  h_u  =  1,
+  h_t  =  2,
+  a_p  =  3,
+  a_a  =  4,
+  a_c  =  5,
+  a_l  =  6,
+  a_e  =  7,
+  a_q  =  8,
+  b_p  =  9,
+  b_a  = 10,
+  b_d  = 11,
+  b_c  = 12
+)
+
+map <- function(name, n) key[[name]] + (n-1) * length(key)
+maps <- function(name, n) key[[name]] + (n-1) * length(key) + 1  # Solution is offset by time dimension
+
+###################################
+# Numerical Delay Differential Equation
+genModel <- function(t, y, params)
+{
+  with(as.list(c(y, params)), {
+    
+    # Interaction is primarily through death (other is panel test)
+    # Living (should be same in all models i)
+    liv  <- y[map("h_u", 1)] + 
+            y[map("h_t", 1)] + 
+            y[map("a_p", 1)] + 
+            y[map("a_a", 1)] + 
+            y[map("b_p", 1)] +
+            y[map("b_a", 1)]
+    
+    rate <- c()
+    for(i in 1:n)
+    {
+      r_d <- f_40yr_drate(t)
+      for(j in 1:n) if(j != i) r_d <- r_d + (r_b[j]*p_bd[j]*(y[map("a_p", j)]+rr_b[j]*y[map("a_a", j)]))/liv
+      
+      r_p <- 0
+      if(p_p > 0) for(j in 1:n) if(j != i) r_p <- r_p + p_p*p_o[i]*r_a[j]*y[map("h_u", j)] / liv
+
+      rate <- c(rate, 
+        (-r_p-r_a[i]-r_d)*y[map("h_u", i)],
+        r_p*y[map("h_u", i)] + (-r_a[i]-r_d)*y[map("h_t", i)],
+        r_a[i]*(1-p_o[i]*p_g[i])*y[map("h_u", i)]+r_a[i]*(1-p_g[i]*p_r[i])*y[map("h_t", i)]-r_b[i]*y[map("a_p", i)] -r_d*y[map("a_p", i)],
+        r_a[i]*p_o[i]*p_g[i]*y[map("h_u", i)]+r_a[i]*p_g[i]*p_r[i]*y[map("h_t", i)] -r_b[i]*rr_b[i]*y[map("a_a", i)] -r_d*y[map("a_a", i)],
+        r_a[i]*y[map("h_u", i)]+r_a[i]*y[map("h_t", i)],
+        r_d*y[map("a_q", i)],
+        r_d*y[map("a_q", i)] - if(t < d_at[i]) 0 else lagderiv(t-d_at[i], map("a_l",i)),
+        r_a[i]*y[map("h_u", i)]+r_a[i]*y[map("h_t", i)] - if(t < d_at[i]) 0 else lagderiv(t-d_at[i], map("a_c", i))*exp(-y[map("a_e", 1)]),
+        r_b[i]*(1-p_bd[i])*y[map("a_p", i)]-r_d*y[map("b_p", i)],
+        r_b[i]*rr_b[i]*(1-p_bd[i])*y[map("a_a", i)] -r_d*y[map("b_a", i)],
+        r_b[i]*p_bd[i]*y[map("a_p", i)] +r_b[i]*rr_b[i]*p_bd[i]*y[map("a_a", i)],
+        r_b[i]*(1-p_bd[i])*y[map("a_p", i)] +r_b[i]*rr_b[i]*(1-p_bd[i])*y[map("a_a", i)]
+      )
+    }
+
+    tests <- p_o[i]*sum(sapply(1:n, function(i) {
+      r_a[i]*y[map("h_u", i)]
+    }))
+      
+    list(c(rate,
+           tests,
+           -disc_rate*y[n * length(key) + 2]
+    ))
+  })
+}
+
+costs <- function(solution, params)
+{
+  k        <- length(solution[,1])
+  simpson  <- alt_simp_coef(k)
+  step     <- solution[2,'time'] - solution[1,'time']
+  
+  with(as.list(params), {
+    disc  <- length(key) * n + 3 # Discount Rate
+    tests <- disc - 1
+
+
+    # Testing costs
+    test.cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
+
+    # Loop over conditions
+    treatment.cost <- 0
+    drug.cost      <- 0
+    b_d            <- 0
+    for(i in 1:n)
+    {
+      # Compute Discounted Cost
+      treatment.cost <- treatment.cost +
+        c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
+        c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
+        c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc])
+      drug.cost <- drug.cost + 
+        c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
+        c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
+        c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
+        c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
+      
+      # Sum fatal b events from all conditions
+      b_d  <- b_d + solution[k,maps('b_d', i)]
+    }
+    
+    # Total living in model
+    life <- solution[,maps('h_u',1)] +
+            solution[,maps('h_t',1)] +
+            solution[,maps('a_p',1)] +
+            solution[,maps('a_a',1)] +
+            solution[,maps('b_p',1)] + 
+            solution[,maps('b_a',1)] 
+
+    # Total possible life units is integral of discounted time
+    pQALY <- sum(simpson*life*solution[,disc])*step
+
+    # Temp disutility of A
+    disA <- 0
+    disB <- 0
+    for(i in 1:n)
+    {
+      disA <- disA + d_a[i]*sum(simpson*solution[,maps('a_q',i)]*solution[,disc])*step
+      
+      # Permanent disutility for B (integration)
+      disB <- disB + 
+              d_b[i]*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step + 
+              d_b[i]*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step 
+    }
+
+    c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
+      dQALY       = unname(pQALY-disA-disB),
+      possible    = unname(pQALY),
+      fatal_b     = unname(b_d),
+      living      = unname(life[k]),
+      disutil_a   = unname(disA),
+      disutil_b   = unname(disB),
+      dCOST.test  = unname(test.cost),
+      dCOST.drug  = unname(drug.cost),
+      dCOST.treat = unname(treatment.cost)
+      )
+  })
+}
+
+# Defined scenarios
+scenarios <- c("none", "reactive-single", "reactive-panel", "preemptive-panel")
+
+generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
+{
+  risks        <- unlist(config$risk[i,])
+  disutilities <- unlist(config$disutility[i,])
+  durations    <- unlist(config$duration[i,])
+  names(durations) <- names(config$duration)
+  costs        <- unlist(config$cost[i,])
+  
+  # Start building the params list with the length
+  n            <- length(unique(gsub(".*_SC_","",names(risks[grep("_SC_",names(risks))]))))
+  params       <- list(n=n)
+  
+  if(n != round(n)) stop("Error (n) In generate.params")
+  
+  getval <- function(x,tt) unname(tt[grep(x,names(tt))])
+  
+  params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
+  params$p_o   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityOrder",risks)
+  params$p_r   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityRead",risks)
+  params$p_bd  <- getval("vFatalB_",risks) # Probability of death as direct result of B
+  params$p_g   <- getval("vGene_",risks) # Probability of genetic variant
+  params$r_a   <- unname(inst_rate(getval("vRiskA_",risks), getval("vDurationA_",risks))) # Rate of a
+  params$r_b   <- unname(inst_rate(getval("vRiskB_",risks), getval("vDurationB_",risks))) # Rate of b
+  params$rr_b  <- getval("vRR_B_",risks) # Relative Risk of B when on alt treatment
+
+  # Costs
+  params$c_a   <- getval("A_c_",costs)       # Cost of Event A
+  params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event B
+  params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event B
+  params$c_tx  <- getval("rx_",costs)        # Cost of Treatment (Daily)
+  params$c_alt <- getval("alt_",costs)       # Cost of alternate treatment (Daily)
+  
+  params$c_t   <- if(scenario %in% c("reactive-panel", "preemptive-panel"))
+                  { config$global$panel_test[1] } else { config$global$single_test[1] }
+                  
+  params$d_a   <- getval("A_",disutilities)         # Disutility of A
+  params$d_at  <- getval("A_",durations)/365        # Duration of A in years.
+  params$d_b   <- getval("B_Survive_",disutilities) # Disutility of B
+  
+  params$disc_rate <- disc_rate       # For computing discount
+
+  params
+}
+
+generate.initial <- function(scenario, params)
+{
+  n <- params[["n"]]
+  yinit <- rep(0, length(key)*n+1)
+  yinit <- c(yinit, 1)
+  
+  if(scenario == "preemptive-panel")
+  {
+    for(i in 1:n) yinit[map("h_t", i)] <- 1
+    yinit[length(yinit)-1] <- 1 # Second to last is number of tests.
+  } else {
+    for(i in 1:n) yinit[map("h_u", i)] <- 1
+  }
+  
+  yinit
+}
+
+# Config is latin hyper cube variable: drawn.parameter.values
+# i is the point to use from the cube
+# scenario specifies scenario
+# times is the time points to solve (resolution)
+model.run <- function(config, i, scenario, times=seq(0, 80, by=2/365))
+{
+  params  <- generate.params(config, i, scenario)
+  init    <- generate.initial(scenario, params)
+  x       <- dede(init, times, genModel, params)
+  costs(x, params)
+}
+
+
+times <- seq(0, 80, by=1/365)
+
+params       <- list()
+
+params$n    = 1   # Only 1 drug under consideration
+params$p_p  = 0.0 # Not reactive panel
+params$p_o  = 1.0 # Probability of ordering test
+params$p_r  = 1.0 # Probability pre-existing test is read
+params$p_bd = 0.05 # Probability of death from B
+params$p_g  = 0.2 # Probability of genetic variant
+params$r_a  = inst_rate(0.1, 10) # 10% Rate of A over a 10 year period
+params$r_b  = inst_rate(0.02, 1) # 2% Rate of B
+params$rr_b = 0.7 # Reduced relative risk of B
+
+# Costs
+params$c_a   <- 10000 # Cost of Event A
+params$c_bs  <- 25000 # Cost of Event B survival
+params$c_bd  <- 15000 # Cost of Event B death
+params$c_tx  <- 0.5   # Cost of normal treatment
+params$c_alt <- 5     # Cost of alternate treatment
+  
+params$c_t   <- 0   # Cost of test
+
+#params$disc_rate <- 0.03 # Discount rate                 
+params$disc_rate <- inst_rate(1-1/1.03, 1)
+
+params$d_a   <- 0.05     # Disutility of A
+params$d_at  <- 1        # Duration of A in years.
+params$d_b   <- 0.1      # Disutility of B
+  
+params$p_o <- 0.0 # Standard
+init     <- generate.initial("none", params)
+none     <- dede(init, times, genModel, params)
+standard <- costs(none, params)
+
+params$p_o <- 1.0 # Genotype
+init     <- generate.initial("single", params)
+single   <- dede(init, times, genModel, params)
+genotype <- costs(single, params)
+
+print(round(standard,5))
+print(round(genotype,5))
+print(round( (standard[1] - genotype[1]) / (standard[2] - genotype[2]) , 1))
+
+# Compute alive & secular death
+none <- cbind(none, rowSums(none[,c(1, 2, 3, 4, 9, 10)+1]))
+none <- cbind(none, 1-none[,16] - none[,12])
+class(none) <- c("deSolve", "matrix")
+
+single <- cbind(single, rowSums(single[,c(1, 2, 3, 4, 9, 10)+1]))
+single <- cbind(single, 1-single[,16] - single[,12])
+class(single) <- c("deSolve", "matrix")
+
+
+cols <- c(
+  "time (y)",
+  "healthy untested",
+  "healthy tested", 
+  "A pri treat",
+  "A alt treat",
+  "A count",
+  "A lag",
+  "A exit",
+  "A queue",
+  "B pri treat",
+  "B alt treat",
+  "B death",
+  "B count",
+  "test count",
+  "discount",
+  "living",
+  "secular death")
+
+colnames(none) <- cols
+colnames(single) <- cols
+```
+
+
