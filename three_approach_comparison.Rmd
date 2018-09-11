@@ -900,13 +900,10 @@ costs <- function(solution, params)
     # Total possible life units is integral of discounted time
     pQALY <- alt_ext_simpson(life*solution[,"disc"])*step
 
-    # Temp disutility of A
-    disA <- 0
-    disB <- 0
-    
-    disA <- disA + d_a*alt_ext_simpson(solution[,'a_q']*solution[,"disc"])*step
+    # Temp disutility of Indication
+    disA <- d_a*alt_ext_simpson(solution[,'a_q']*solution[,"disc"])*step
       
-    # Permanent disutility for B (integration)
+    # Permanent disutility for Event
     disB <- d_b*alt_ext_simpson(solution[,'b_p']*solution[,"disc"])*step + 
             d_b*alt_ext_simpson(solution[,'b_a']*solution[,"disc"])*step 
 
@@ -927,47 +924,6 @@ costs <- function(solution, params)
 # Defined scenarios
 scenarios <- c("none", "reactive")
 
-generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
-{
-  risks        <- unlist(config$risk[i,])
-  disutilities <- unlist(config$disutility[i,])
-  durations    <- unlist(config$duration[i,])
-  names(durations) <- names(config$duration)
-  costs        <- unlist(config$cost[i,])
-  
-  # Start building the params list with the length
-  n            <- length(unique(gsub(".*_SC_","",names(risks[grep("_SC_",names(risks))]))))
-  params       <- list(n=n)
-  
-  if(n != round(n)) stop("Error (n) In generate.params")
-  
-  getval <- function(x,tt) unname(tt[grep(x,names(tt))])
-  
-  params$p_o   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityOrder",risks)
-  params$p_bd  <- getval("vFatalB_",risks) # Probability of death as direct result of B
-  params$p_g   <- getval("vGene_",risks) # Probability of genetic variant
-  params$r_a   <- unname(inst_rate(getval("vRiskA_",risks), getval("vDurationA_",risks))) # Rate of Indication
-  params$r_b   <- unname(inst_rate(getval("vRiskB_",risks), getval("vDurationB_",risks))) # Rate of Event
-  params$rr_b  <- getval("vRR_B_",risks) # Relative Risk of Event when on Alternate treatment
-
-  # Costs
-  params$c_a   <- getval("A_c_",costs)       # Cost of Indication (A)
-  params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event (B)
-  params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event (B)
-  params$c_tx  <- getval("rx_",costs)        # Cost of Treatment (Daily)
-  params$c_alt <- getval("alt_",costs)       # Cost of alternate treatment (Daily)
-  
-  params$c_t   <- config$global$single_test[1] 
-                  
-  params$d_a   <- getval("A_",disutilities)         # Disutility of Indication
-  params$d_at  <- getval("A_",durations)/365        # Duration of Indication in years.
-  params$d_b   <- getval("B_Survive_",disutilities) # Disutility of Event
-  
-  params$disc_rate <- disc_rate       # For computing discount
-
-  params
-}
-
 generate.initial <- function(scenario, params)
 {
   c(h_u   = 1,
@@ -985,19 +941,8 @@ generate.initial <- function(scenario, params)
     disc  = 1)
 }
 
-# Config is latin hyper cube variable: drawn.parameter.values
-# i is the point to use from the cube
-# scenario specifies scenario
-# times is the time points to solve (resolution)
-model.run <- function(config, i, scenario, times=seq(0, 80, by=2/365))
-{
-  params  <- generate.params(config, i, scenario)
-  init    <- generate.initial(scenario, params)
-  x       <- dede(init, times, genModel, params)
-  costs(x, params)
-}
 
-times <- seq(0, 80, by=1/365) # 80 years, daily resolution
+times <- seq(0, 80, by=7/365) # 80 years, approx weekly resolution
 
 params       <- list()
 
