@@ -834,7 +834,7 @@ Reusing the N condition simple model, we just run it for a single condition.
 ```{r deq_def}
 library(deSolve)
 
-# Gompertz model of secular for 40yr female
+# Gompertz model of secular death for 40yr female
 shape <- 0.1007511
 rate  <- 0.0008370717
 
@@ -853,17 +853,17 @@ alt_ext_simpson <- function(x)
 genModel <- function(t, y, params)
 {
   with(as.list(c(y, params)), {
-    liv  <- sum(y[c("h_u","h_t","a_p","a_a","b_p","b_a")])
+    liv  <- sum(y[c("h_u","a_p","a_a","b_p","b_a")])
     r_d <- f_40yr_drate(t)
 
-    list(c(h_u = (-r_a-r_d)*h_u,
-      h_t = (-r_a-r_d)*h_t,
-      a_p = r_a*(1-p_o*p_g)*h_u+r_a*(1-p_g*p_r)*h_t-r_b*a_p -r_d*a_p,
-      a_a = r_a*p_o*p_g*h_u+r_a*p_g*p_r*h_t -r_b*rr_b*a_a -r_d*a_a,
-      a_c = r_a*h_u+r_a*h_t,
+    list(c(
+      h_u = (-r_a-r_d)*h_u,
+      a_p = r_a*(1-p_o*p_g)*h_u-r_b*a_p -r_d*a_p,
+      a_a = r_a*p_o*p_g*h_u-r_b*rr_b*a_a -r_d*a_a,
+      a_c = r_a*h_u,
       a_l = r_d*a_q,
       a_e = r_d*a_q - if(t < d_at) 0 else lagderiv(t-d_at, 6),
-      a_q = r_a*h_u+r_a*h_t - if(t < d_at) 0 else lagderiv(t-d_at, 5)*exp(-a_e),
+      a_q = r_a*h_u - if(t < d_at) 0 else lagderiv(t-d_at, 5)*exp(-a_e),
       b_p = r_b*(1-p_bd)*a_p-r_d*b_p,
       b_a = r_b*rr_b*(1-p_bd)*a_a -r_d*b_a,
       b_d = r_b*p_bd*a_p +r_b*rr_b*p_bd*a_a,
@@ -883,29 +883,19 @@ costs <- function(solution, params)
     # Testing costs
     test.cost <- c_t*(solution[1,"tests"]+sum(diff(solution[,"tests"])*solution[2:k,"disc"]))
 
-    # Loop over conditions
-    treatment.cost <- 0
-    drug.cost      <- 0
-    b_d            <- 0
-    for(i in 1:n)
-    {
-      # Compute Discounted Cost
-      treatment.cost <- treatment.cost +
-        c_a[i]  *sum(diff(solution[,"a_c"])*solution[2:k,"disc"]) +
-        c_bs[i] *sum(diff(solution[,"b_c"])*solution[2:k,"disc"]) +
-        c_bd[i] *sum(diff(solution[,"b_d"])*solution[2:k,"disc"])
-      drug.cost <- drug.cost + 
-        c_tx[i] *365*alt_ext_simpson(solution[,"a_p"]*solution[,"disc"])*step +
-        c_alt[i]*365*alt_ext_simpson(solution[,"a_a"]*solution[,"disc"])*step +
-        c_tx[i] *365*alt_ext_simpson(solution[,"b_p"]*solution[,"disc"])*step +
-        c_alt[i]*365*alt_ext_simpson(solution[,"b_a"]*solution[,"disc"])*step
-      
-      # Sum fatal b events from all conditions
-      b_d  <- b_d + solution[k,"b_d"]
-    }
-    
+    # Compute Discounted Cost
+    treatment.cost <- 
+      c_a  *alt_ext_simpson(diff(solution[,"a_c"])*solution[2:k,"disc"]) +
+      c_bs *alt_ext_simpson(diff(solution[,"b_c"])*solution[2:k,"disc"]) +
+      c_bd *alt_ext_simpson(diff(solution[,"b_d"])*solution[2:k,"disc"])
+    drug.cost <-
+      c_tx *365*alt_ext_simpson(solution[,"a_p"]*solution[,"disc"])*step +
+      c_alt*365*alt_ext_simpson(solution[,"a_a"]*solution[,"disc"])*step +
+      c_tx *365*alt_ext_simpson(solution[,"b_p"]*solution[,"disc"])*step +
+      c_alt*365*alt_ext_simpson(solution[,"b_a"]*solution[,"disc"])*step
+
     # Total living in model
-    life <- rowSums(solution[,c("h_u","h_t","a_p","a_a","b_p","b_a")])
+    life <- rowSums(solution[,c("h_u","a_p","a_a","b_p","b_a")])
 
     # Total possible life units is integral of discounted time
     pQALY <- alt_ext_simpson(life*solution[,"disc"])*step
@@ -913,20 +903,17 @@ costs <- function(solution, params)
     # Temp disutility of A
     disA <- 0
     disB <- 0
-    for(i in 1:n)
-    {
-      disA <- disA + d_a[i]*alt_ext_simpson(solution[,'a_q']*solution[,"disc"])*step
+    
+    disA <- disA + d_a*alt_ext_simpson(solution[,'a_q']*solution[,"disc"])*step
       
-      # Permanent disutility for B (integration)
-      disB <- disB + 
-              d_b[i]*alt_ext_simpson(solution[,'b_p']*solution[,"disc"])*step + 
-              d_b[i]*alt_ext_simpson(solution[,'b_a']*solution[,"disc"])*step 
-    }
+    # Permanent disutility for B (integration)
+    disB <- d_b*alt_ext_simpson(solution[,'b_p']*solution[,"disc"])*step + 
+            d_b*alt_ext_simpson(solution[,'b_a']*solution[,"disc"])*step 
 
     c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
       dQALY       = unname(pQALY-disA-disB),
       possible    = unname(pQALY),
-      fatal_b     = unname(b_d),
+      fatal_b     = unname(solution[k,"b_d"]),
       living      = unname(life[k]),
       disutil_a   = unname(disA),
       disutil_b   = unname(disB),
@@ -938,7 +925,7 @@ costs <- function(solution, params)
 }
 
 # Defined scenarios
-scenarios <- c("none", "reactive-single", "reactive-panel", "preemptive-panel")
+scenarios <- c("none", "reactive")
 
 generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
 {
@@ -956,28 +943,25 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
   
   getval <- function(x,tt) unname(tt[grep(x,names(tt))])
   
-  params$p_p   <- if(scenario == "reactive-panel") 1.0 else 0.0
   params$p_o   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityOrder",risks)
-  params$p_r   <- if(scenario == "none") rep(0.0, n) else getval("vProbabilityRead",risks)
   params$p_bd  <- getval("vFatalB_",risks) # Probability of death as direct result of B
   params$p_g   <- getval("vGene_",risks) # Probability of genetic variant
-  params$r_a   <- unname(inst_rate(getval("vRiskA_",risks), getval("vDurationA_",risks))) # Rate of a
-  params$r_b   <- unname(inst_rate(getval("vRiskB_",risks), getval("vDurationB_",risks))) # Rate of b
-  params$rr_b  <- getval("vRR_B_",risks) # Relative Risk of B when on alt treatment
+  params$r_a   <- unname(inst_rate(getval("vRiskA_",risks), getval("vDurationA_",risks))) # Rate of Indication
+  params$r_b   <- unname(inst_rate(getval("vRiskB_",risks), getval("vDurationB_",risks))) # Rate of Event
+  params$rr_b  <- getval("vRR_B_",risks) # Relative Risk of Event when on Alternate treatment
 
   # Costs
-  params$c_a   <- getval("A_c_",costs)       # Cost of Event A
-  params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event B
-  params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event B
+  params$c_a   <- getval("A_c_",costs)       # Cost of Indication (A)
+  params$c_bs  <- getval("B_Survive_",costs) # Cost of Surviving Event (B)
+  params$c_bd  <- getval("B_Death_",costs )  # Cost of Death from Event (B)
   params$c_tx  <- getval("rx_",costs)        # Cost of Treatment (Daily)
   params$c_alt <- getval("alt_",costs)       # Cost of alternate treatment (Daily)
   
-  params$c_t   <- if(scenario %in% c("reactive-panel", "preemptive-panel"))
-                  { config$global$panel_test[1] } else { config$global$single_test[1] }
+  params$c_t   <- config$global$single_test[1] 
                   
-  params$d_a   <- getval("A_",disutilities)         # Disutility of A
-  params$d_at  <- getval("A_",durations)/365        # Duration of A in years.
-  params$d_b   <- getval("B_Survive_",disutilities) # Disutility of B
+  params$d_a   <- getval("A_",disutilities)         # Disutility of Indication
+  params$d_at  <- getval("A_",durations)/365        # Duration of Indication in years.
+  params$d_b   <- getval("B_Survive_",disutilities) # Disutility of Event
   
   params$disc_rate <- disc_rate       # For computing discount
 
@@ -986,30 +970,19 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
 
 generate.initial <- function(scenario, params)
 {
-  yinit <- c(h_u = 0, 
-             h_t = 0,
-             a_p = 0,
-             a_a = 0,
-             a_c = 0,
-             a_l = 0,
-             a_e = 0,
-             a_q = 0,
-             b_p = 0,
-             b_a = 0,
-             b_d = 0,
-             b_c = 0,
-             tests = 0,
-             disc = 1)
-
-  if(scenario == "preemptive-panel")
-  {
-    yinit["h_t"]   <- 1
-    yinit["tests"] <- 1
-  } else {
-    yinit["h_u"] <- 1
-  }
-  
-  yinit
+  c(h_u   = 1,
+    a_p   = 0,
+    a_a   = 0,
+    a_c   = 0,
+    a_l   = 0,
+    a_e   = 0,
+    a_q   = 0,
+    b_p   = 0,
+    b_a   = 0,
+    b_d   = 0,
+    b_c   = 0,
+    tests = 0,
+    disc  = 1)
 }
 
 # Config is latin hyper cube variable: drawn.parameter.values
@@ -1024,15 +997,12 @@ model.run <- function(config, i, scenario, times=seq(0, 80, by=2/365))
   costs(x, params)
 }
 
-
-times <- seq(0, 80, by=1/365)
+times <- seq(0, 80, by=1/365) # 80 years, daily resolution
 
 params       <- list()
 
 params$n    = 1   # Only 1 drug under consideration
-params$p_p  = 0.0 # Not reactive panel
 params$p_o  = 1.0 # Probability of ordering test
-params$p_r  = 1.0 # Probability pre-existing test is read
 params$p_bd = 0.05 # Probability of death from B
 params$p_g  = 0.2 # Probability of genetic variant
 params$r_a  = inst_rate(0.1, 10) # 10% Rate of A over a 10 year period
@@ -1069,34 +1039,33 @@ print(round(standard,5))
 print(round(genotype,5))
 print(round( (standard[1] - genotype[1]) / (standard[2] - genotype[2]) , 1))
 
-# Compute alive & secular death
-none <- cbind(none, rowSums(none[,c(1, 2, 3, 4, 9, 10)+1]))
-none <- cbind(none, 1-none[,16] - none[,12])
+# Compute alive &  death
+none <- cbind(none, rowSums(none[,c("h_u","a_p","a_a","b_p","b_a")]))
+none <- cbind(none, 1-none[,15] - none[,"b_d"])
 class(none) <- c("deSolve", "matrix")
 
-single <- cbind(single, rowSums(single[,c(1, 2, 3, 4, 9, 10)+1]))
-single <- cbind(single, 1-single[,16] - single[,12])
+single <- cbind(single, rowSums(single[,c("h_u","a_p","a_a","b_p","b_a")]))
+single <- cbind(single, 1-single[,15] - single[,"b_d"])
 class(single) <- c("deSolve", "matrix")
 
-
 cols <- c(
-  "time (y)",
-  "healthy untested",
-  "healthy tested", 
-  "A pri treat",
-  "A alt treat",
-  "A count",
-  "A lag",
-  "A exit",
-  "A queue",
-  "B pri treat",
-  "B alt treat",
-  "B death",
-  "B count",
-  "test count",
-  "discount",
-  "living",
-  "secular death")
+  "Time (y)",
+  "Healthy Untested",
+  "Ind Pri Treat",
+  "Ind Alt Treat",
+  "Ind Count",
+  "Ind lag",
+  "Ind exit",
+  "Ind queue",
+  "Event Pri Treat",
+  "Event Alt Treat",
+  "Event Death",
+  "Event Count",
+  "Test Count",
+  "Discount",
+  "Living",
+  "Dead"
+)
 
 colnames(none) <- cols
 colnames(single) <- cols
