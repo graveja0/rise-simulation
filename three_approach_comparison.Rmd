@@ -830,9 +830,9 @@ ot
 # Differential Equation Method
 
 Reusing the N condition simple model, we just run it for a single condition.
+
 ```{r deq_def}
 library(deSolve)
-
 
 # Gompertz model of secular for 40yr female
 shape <- 0.1007511
@@ -843,82 +843,33 @@ f_40yr_drate <- function(t) rate*exp(shape*t)
 
 inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
 
-# This is for doing numberical integration of a set of numbers at an even interval
-# FAR BETTER than half-cycle correction or life-table methods
-alt_simp_coef <- function(i)
-{
-  if (i < 8) stop("Invalid Simpson coefficient size")
-   
-  # pg.117 4.1.14, Numerical Recipes in C, 1st edition
-  c(17/48, 50/48, 43/48, 49/48, rep(1, i-8), 49/48, 43/48, 50/48, 17/48) 
-}
+# Vector must be 8 points or longer for alternate simpson integration
+alt_ext_simpson <- function(x)
+  sum(c(17/48, 50/48, 43/48, 49/48, rep(1, length(x)-8), 49/48, 43/48, 50/48, 17/48)*x)
 
-
-key <- list(
-  h_u  =  1,
-  h_t  =  2,
-  a_p  =  3,
-  a_a  =  4,
-  a_c  =  5,
-  a_l  =  6,
-  a_e  =  7,
-  a_q  =  8,
-  b_p  =  9,
-  b_a  = 10,
-  b_d  = 11,
-  b_c  = 12
-)
-
-map <- function(name, n) key[[name]] + (n-1) * length(key)
-maps <- function(name, n) key[[name]] + (n-1) * length(key) + 1  # Solution is offset by time dimension
 
 ###################################
 # Numerical Delay Differential Equation
 genModel <- function(t, y, params)
 {
   with(as.list(c(y, params)), {
-    
-    # Interaction is primarily through death (other is panel test)
-    # Living (should be same in all models i)
-    liv  <- y[map("h_u", 1)] + 
-            y[map("h_t", 1)] + 
-            y[map("a_p", 1)] + 
-            y[map("a_a", 1)] + 
-            y[map("b_p", 1)] +
-            y[map("b_a", 1)]
-    
-    rate <- c()
-    for(i in 1:n)
-    {
-      r_d <- f_40yr_drate(t)
-      for(j in 1:n) if(j != i) r_d <- r_d + (r_b[j]*p_bd[j]*(y[map("a_p", j)]+rr_b[j]*y[map("a_a", j)]))/liv
-      
-      r_p <- 0
-      if(p_p > 0) for(j in 1:n) if(j != i) r_p <- r_p + p_p*p_o[i]*r_a[j]*y[map("h_u", j)] / liv
+    liv  <- sum(y[c("h_u","h_t","a_p","a_a","b_p","b_a")])
+    r_d <- f_40yr_drate(t)
 
-      rate <- c(rate, 
-        (-r_p-r_a[i]-r_d)*y[map("h_u", i)],
-        r_p*y[map("h_u", i)] + (-r_a[i]-r_d)*y[map("h_t", i)],
-        r_a[i]*(1-p_o[i]*p_g[i])*y[map("h_u", i)]+r_a[i]*(1-p_g[i]*p_r[i])*y[map("h_t", i)]-r_b[i]*y[map("a_p", i)] -r_d*y[map("a_p", i)],
-        r_a[i]*p_o[i]*p_g[i]*y[map("h_u", i)]+r_a[i]*p_g[i]*p_r[i]*y[map("h_t", i)] -r_b[i]*rr_b[i]*y[map("a_a", i)] -r_d*y[map("a_a", i)],
-        r_a[i]*y[map("h_u", i)]+r_a[i]*y[map("h_t", i)],
-        r_d*y[map("a_q", i)],
-        r_d*y[map("a_q", i)] - if(t < d_at[i]) 0 else lagderiv(t-d_at[i], map("a_l",i)),
-        r_a[i]*y[map("h_u", i)]+r_a[i]*y[map("h_t", i)] - if(t < d_at[i]) 0 else lagderiv(t-d_at[i], map("a_c", i))*exp(-y[map("a_e", 1)]),
-        r_b[i]*(1-p_bd[i])*y[map("a_p", i)]-r_d*y[map("b_p", i)],
-        r_b[i]*rr_b[i]*(1-p_bd[i])*y[map("a_a", i)] -r_d*y[map("b_a", i)],
-        r_b[i]*p_bd[i]*y[map("a_p", i)] +r_b[i]*rr_b[i]*p_bd[i]*y[map("a_a", i)],
-        r_b[i]*(1-p_bd[i])*y[map("a_p", i)] +r_b[i]*rr_b[i]*(1-p_bd[i])*y[map("a_a", i)]
-      )
-    }
-
-    tests <- p_o[i]*sum(sapply(1:n, function(i) {
-      r_a[i]*y[map("h_u", i)]
-    }))
-      
-    list(c(rate,
-           tests,
-           -disc_rate*y[n * length(key) + 2]
+    list(c(h_u = (-r_a-r_d)*h_u,
+      h_t = (-r_a-r_d)*h_t,
+      a_p = r_a*(1-p_o*p_g)*h_u+r_a*(1-p_g*p_r)*h_t-r_b*a_p -r_d*a_p,
+      a_a = r_a*p_o*p_g*h_u+r_a*p_g*p_r*h_t -r_b*rr_b*a_a -r_d*a_a,
+      a_c = r_a*h_u+r_a*h_t,
+      a_l = r_d*a_q,
+      a_e = r_d*a_q - if(t < d_at) 0 else lagderiv(t-d_at, 6),
+      a_q = r_a*h_u+r_a*h_t - if(t < d_at) 0 else lagderiv(t-d_at, 5)*exp(-a_e),
+      b_p = r_b*(1-p_bd)*a_p-r_d*b_p,
+      b_a = r_b*rr_b*(1-p_bd)*a_a -r_d*b_a,
+      b_d = r_b*p_bd*a_p +r_b*rr_b*p_bd*a_a,
+      b_c = r_b*(1-p_bd)*a_p +r_b*rr_b*(1-p_bd)*a_a,
+      tests = p_o*r_a*h_u,
+      disc = -disc_rate*disc
     ))
   })
 }
@@ -926,16 +877,11 @@ genModel <- function(t, y, params)
 costs <- function(solution, params)
 {
   k        <- length(solution[,1])
-  simpson  <- alt_simp_coef(k)
   step     <- solution[2,'time'] - solution[1,'time']
   
   with(as.list(params), {
-    disc  <- length(key) * n + 3 # Discount Rate
-    tests <- disc - 1
-
-
     # Testing costs
-    test.cost <- c_t*(solution[1,tests]+sum(diff(solution[,tests])*solution[2:k,disc]))
+    test.cost <- c_t*(solution[1,"tests"]+sum(diff(solution[,"tests"])*solution[2:k,"disc"]))
 
     # Loop over conditions
     treatment.cost <- 0
@@ -945,41 +891,36 @@ costs <- function(solution, params)
     {
       # Compute Discounted Cost
       treatment.cost <- treatment.cost +
-        c_a[i]  *sum(diff(solution[,maps('a_c',i)])*solution[2:k,disc]) +
-        c_bs[i] *sum(diff(solution[,maps('b_c',i)])*solution[2:k,disc]) +
-        c_bd[i] *sum(diff(solution[,maps('b_d',i)])*solution[2:k,disc])
+        c_a[i]  *sum(diff(solution[,"a_c"])*solution[2:k,"disc"]) +
+        c_bs[i] *sum(diff(solution[,"b_c"])*solution[2:k,"disc"]) +
+        c_bd[i] *sum(diff(solution[,"b_d"])*solution[2:k,"disc"])
       drug.cost <- drug.cost + 
-        c_tx[i] *365*sum(simpson*solution[,maps('a_p',i)]*solution[,disc])*step +
-        c_alt[i]*365*sum(simpson*solution[,maps('a_a',i)]*solution[,disc])*step +
-        c_tx[i] *365*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step +
-        c_alt[i]*365*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step
+        c_tx[i] *365*alt_ext_simpson(solution[,"a_p"]*solution[,"disc"])*step +
+        c_alt[i]*365*alt_ext_simpson(solution[,"a_a"]*solution[,"disc"])*step +
+        c_tx[i] *365*alt_ext_simpson(solution[,"b_p"]*solution[,"disc"])*step +
+        c_alt[i]*365*alt_ext_simpson(solution[,"b_a"]*solution[,"disc"])*step
       
       # Sum fatal b events from all conditions
-      b_d  <- b_d + solution[k,maps('b_d', i)]
+      b_d  <- b_d + solution[k,"b_d"]
     }
     
     # Total living in model
-    life <- solution[,maps('h_u',1)] +
-            solution[,maps('h_t',1)] +
-            solution[,maps('a_p',1)] +
-            solution[,maps('a_a',1)] +
-            solution[,maps('b_p',1)] + 
-            solution[,maps('b_a',1)] 
+    life <- rowSums(solution[,c("h_u","h_t","a_p","a_a","b_p","b_a")])
 
     # Total possible life units is integral of discounted time
-    pQALY <- sum(simpson*life*solution[,disc])*step
+    pQALY <- alt_ext_simpson(life*solution[,"disc"])*step
 
     # Temp disutility of A
     disA <- 0
     disB <- 0
     for(i in 1:n)
     {
-      disA <- disA + d_a[i]*sum(simpson*solution[,maps('a_q',i)]*solution[,disc])*step
+      disA <- disA + d_a[i]*alt_ext_simpson(solution[,'a_q']*solution[,"disc"])*step
       
       # Permanent disutility for B (integration)
       disB <- disB + 
-              d_b[i]*sum(simpson*solution[,maps('b_p',i)]*solution[,disc])*step + 
-              d_b[i]*sum(simpson*solution[,maps('b_a',i)]*solution[,disc])*step 
+              d_b[i]*alt_ext_simpson(solution[,'b_p']*solution[,"disc"])*step + 
+              d_b[i]*alt_ext_simpson(solution[,'b_a']*solution[,"disc"])*step 
     }
 
     c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
@@ -1045,16 +986,27 @@ generate.params <- function(config, i, scenario, disc_rate = inst_rate(0.03, 1))
 
 generate.initial <- function(scenario, params)
 {
-  n <- params[["n"]]
-  yinit <- rep(0, length(key)*n+1)
-  yinit <- c(yinit, 1)
-  
+  yinit <- c(h_u = 0, 
+             h_t = 0,
+             a_p = 0,
+             a_a = 0,
+             a_c = 0,
+             a_l = 0,
+             a_e = 0,
+             a_q = 0,
+             b_p = 0,
+             b_a = 0,
+             b_d = 0,
+             b_c = 0,
+             tests = 0,
+             disc = 1)
+
   if(scenario == "preemptive-panel")
   {
-    for(i in 1:n) yinit[map("h_t", i)] <- 1
-    yinit[length(yinit)-1] <- 1 # Second to last is number of tests.
+    yinit["h_t"]   <- 1
+    yinit["tests"] <- 1
   } else {
-    for(i in 1:n) yinit[map("h_u", i)] <- 1
+    yinit["h_u"] <- 1
   }
   
   yinit
