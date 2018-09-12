@@ -13,3 +13,4 @@ packrat/lib*/
 *.out
 core.*
 ./temp/*.R
+smdm/*.html

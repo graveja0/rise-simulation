@@ -1,0 +1,456 @@
+---
+title: "TunnelError"
+author: "Shawn Garbett"
+date: "June 20, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Markov Modeling Errors
+
+Markov models are very attractive in economic modeling for decision making. However when compared with DES or differential equation models, errors are introduced when making the conversion. The first and most troubling is that of rescaling properly, which is not common practice. This issue is covered in great length in the paper *Changing Cycle Lengths in State-Transition Models: Challenges and Solutions* by Jagpreet Chhatwal. In general the problem with changing cycle lengths in a Markov model with competing events of differing probabilities, the common techniques of rescaling introduces appreciable error. The correct method involves n-th matrix roots and eigenvector composition.
+
+Pushing the rescaling issue aside, another potential conversion error occurs when dealing with tunnel states or time delay effects. For example, imagine a healthy population (i) that is entering a state (x) that leaves them at risk for one time unit (year) of a complication (y) or passing out without complication (z). One can construct a simple time delay differential model that will be used as a reference.
+
+```{r diffeq}
+library(deSolve)
+
+params <- c(
+  x_rate = 0.1,
+  y_rate = 0.5,
+  lag    = 1
+)
+
+params['a'] <- 1 - exp(-params['x_rate'] * params['lag'])
+params['b'] <- 1 - exp(-params['y_rate'] * params['lag'])
+
+
+Truth <- function(t, y, params)
+{
+  with(as.list(c(y, params)), {
+    
+    entered <- ifelse(t < lag, 0, x_rate*lagvalue(t-lag, 1))
+    # Risk of y is constant, so integral is trivial exp. 
+    leaving <- entered * exp(-y_rate*lag) 
+  
+    list(c(
+      i = -x_rate*i,
+      x = x_rate*i - y_rate*x - leaving,
+      y = y_rate*x,
+      z = leaving
+    ))
+  })
+}
+
+horizon  <- 40
+times <- seq(0, horizon, by=1/365)
+out <- dede(c(i=1, x=0, y=0, z=0), times, Truth, params)
+plot(out)
+```
+
+This shows the time-delay differential solution to the posed problem. One can see the lag before individuals enter the 'z' state.
+
+Now the problem is how to model this in a Markov manner. A simple tunnel state like this will now be blocky, and any simple attempt at rescaling rates without taking into account the proper method is already known to introduce error. We will proceed by degrees to show each level of error using 'y' as our measure.
+
+# One unit time scale
+
+```{r}
+library(markovchain)
+
+states <- c("i", "x", "y", "z")
+
+probs <- with(as.list(params), {
+  matrix(c(
+    1-a,                a,              0,              0,
+    0,                  0,              b,              1-b,
+    0,                  0,              1,              0,
+    0,                  0,              0,              1
+  ),
+  byrow=TRUE, nrow=4, dimnames=list(states, states)
+)})
+
+mcA <- new("markovchain", transitionMatrix=probs, name="naive")
+
+initial <- c(1, 0, 0, 0)
+
+naive <- t(sapply(times, function(x) initial*mcA^x))
+naive <- cbind(times, naive)
+colnames(naive) <- colnames(out)
+
+pvar <- function(x, mc)
+{
+  plot(times, out[,x], typ="l", xlab="", ylab="ratio", main=x, ylim=c(0,max(out[,x], mc[,x])))
+  lines(times, mc[,x], col='red')
+}
+
+par(mfrow=c(2,2))
+pvar("i", naive)
+pvar("x", naive)
+pvar("y", naive)
+pvar("z", naive)
+```
+
+The differences are quite obvious in this first naive attempt and the value in question 'y' is overestimated. In an economic model this a variable that is quite likely to increase cost and decrease quality of life. This results in overly conservative estimates when these conditions arise, and can result in a change in decision making based upon modeling error.
+
+# Monthly time scale
+
+## Eigencomposition Method
+
+Using the known proper eigencomposition method one can do a monthly rescaling to see what effect that will have upon the results.
+
+```{r}
+v <- eigen(probs)$vector
+d <- eigen(probs)$values
+probs_e <- v %*% diag(d ^ (1/12)) %*% solve(v)
+probs_e
+```
+
+So under proper rescaling this results in negative probabilities! The root of the problem is a fundamental mismatch between tunnel states and Markov modeling--tunnel states represent memory which violates a fundamental assumption of Markov modeling. 100% need to exit the tunnel state. If one splits the tunnel state into 2 tunnel states, then there is no set of probabilities executed twice that results in the final state of the tunnel having occupancy and 100% exiting the tunnel state. 
+
+Knowing this, let's still run it and see what happens.
+
+```{r}
+mcE <- new("markovchain", 
+           transitionMatrix=probs_e,
+           name="monthly")
+
+monthly_e <- t(sapply(times, function(x) initial*mcE^(x*12)))
+monthly_e <- cbind(times, monthly_e)
+colnames(monthly_e) <- colnames(out)
+
+par(mfrow=c(2,2))
+pvar("i",monthly_e)
+pvar("x",monthly_e)
+pvar("y",monthly_e)
+pvar("z",monthly_e)
+```
+
+As expected, there are some states with negative occupancy where there would normally be zero. Oddly, the resulting error is almost exactly the same. The eigen composition method did it's best to fit the curves even if they did stray in physically impossible territory, these end up matching the original curves quite closely overall.
+
+Using a common judicious and reasonable choices. Say, 1/12 leaves every cycle. There will be some residual, but the hope under such an assumption is that the resulting error will be small.
+
+```{r}
+# Simple rescaling method
+a <- 1-(1-probs[1,2])^(1/12)
+b <- 1-(1-probs[2,3])^(1/12)
+
+probs2 <- matrix(c(
+    1-a,           a,         0,         0,
+    0,             1-b-1/12,  b,         1/12,
+    0,             0,         1,         0,
+    0,             0,         0,         1
+  ),
+  byrow=TRUE, nrow=4, dimnames=list(states, states)
+)
+mcB <- new("markovchain", 
+           transitionMatrix=probs2,
+           name="monthly")
+
+monthly <- t(sapply(times, function(x) initial*mcB^(x*12)))
+monthly <- cbind(times, monthly)
+colnames(monthly) <- colnames(out)
+
+par(mfrow=c(2,2))
+pvar("i",monthly)
+pvar("x",monthly)
+pvar("y",monthly)
+pvar("z",monthly)
+```
+
+Surprisingly, that worked to some degree However, it was ad-hoc and I know of no theoretical reason why it did work. 
+
+Would a daily rescaling do any better?
+
+```{r}
+# Simple rescaling method
+a <- 1-(1-probs[1,2])^(1/365)
+a <- 1-(1-probs[2,3])^(1/365)
+
+
+probs3 <- matrix(c(
+    1-a,    a,         0,              0,
+    0,      1-b-1/365, b,              1/365,
+    0,      0,         1,              0,
+    0,      0,         0,              1
+  ),
+  byrow=TRUE, nrow=4, dimnames=list(states, states)
+)
+mcC <- new("markovchain", 
+           transitionMatrix=probs3,
+           name="daily")
+
+daily <- t(sapply(times, function(x) initial*mcC^(x*365)))
+daily <- cbind(times, daily)
+colnames(daily) <- colnames(out)
+
+par(mfrow=c(2,2))
+pvar("i",daily)
+pvar("x",daily)
+pvar("y",daily)
+pvar("z",daily)
+```
+
+
+So daily over monthly shows major errors. Simple rescaling leads to an issue of what the proper scale should be and the more it's done the worse the error becomes due to competing risks being improperly scaled. Proper rescaling via the eigen decomposition method leads to negative probabilities with a tunnel state. Neither are fully acceptable solutions to the issue.
+
+## Tunnel State Markov
+
+So, what happens if we create tunnel states in the Markov chain itself by adding additional nodes?
+
+```{r}
+# Simple rescaling method
+xr <- 1-(1-probs[1,2])^(1/12)
+yr <- (1-(1-probs[2,3])^(1/12))  #/ 1.399
+iy <- 1-yr
+
+states <- c("i", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11", "x12", "y", "z")
+probs3 <- matrix(c(
+    1-xr, xr,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  0, # i
+    0,     0,  iy,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, yr, 0, # x1
+    0,     0,  0, iy,0, 0, 0, 0, 0, 0, 0, 0, 0, yr, 0, # x2
+    0,     0,  0, 0, iy,0, 0, 0, 0, 0, 0, 0, 0, yr, 0, # x3
+    0,     0,  0, 0, 0, iy,0, 0, 0, 0, 0, 0, 0, yr, 0, # x4
+    0,     0,  0, 0, 0, 0, iy,0, 0, 0, 0, 0, 0, yr, 0, # x5
+    0,     0,  0, 0, 0, 0, 0, iy,0, 0, 0, 0, 0, yr, 0, # x6
+    0,     0,  0, 0, 0, 0, 0, 0, iy,0, 0, 0, 0, yr, 0, # x7
+    0,     0,  0, 0, 0, 0, 0, 0, 0, iy,0, 0, 0, yr, 0, # x8
+    0,     0,  0, 0, 0, 0, 0, 0, 0, 0, iy,0, 0, yr, 0, # x9
+    0,     0,  0, 0, 0, 0, 0, 0, 0, 0, 0, iy,0, yr, 0, # x10
+    0,     0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, iy,yr, 0, # x11
+    0,     0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, yr, iy, #x12
+    0,     0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,  0, # y
+    0,     0,  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,  1  # z
+  ),
+  byrow=TRUE, nrow=length(states), dimnames=list(states, states)
+)
+mcD <- new("markovchain", 
+           transitionMatrix=probs3,
+           name="monthly")
+
+initial <- c(1, rep(0, 14))
+monthly <- t(sapply(times, function(x) initial*mcD^(x*12)))
+
+
+monthly <- cbind(
+  times, 
+  monthly[,1],
+  rowSums(monthly[,2:13]),
+  monthly[,14],
+  monthly[,15]
+)
+colnames(monthly) <- colnames(out)
+
+
+par(mfrow=c(2,2))
+pvar("i",monthly)
+pvar("x",monthly)
+pvar("y",monthly)
+pvar("z",monthly)
+```
+
+Curiously, the simple node splitting was sufficient to deal with the tunnel state to reasonable accuracy with this small example. The problem with the splitting approach is it can quickly leads to a state explosion. For example, if two different conditions needed memory and it were split into 12 time steps, this would result in 144 Markov states (12^2) that needed to be created and tracked just to handle 2 different external risks with memory. Typical cost effectiveness studies can involve many of these, so overall while this reduced error it quickly becomes difficult to manage all the associated bookkeeping.
+
+## Time Delay Differentials
+
+We contructed a model of the truth using time delay differential equations numerical. Now we shall examine the analytical model to find out precisely what is going on and compare this with the Markov approach.
+
+Assume that there exists an initial population $I$ that transitions to a risk state $X$ at a rate $\alpha$. From this risk state $X$ a transition to $Y$ for having realized the risk at a rate $\beta$ can occur. After a delay of $t-\tau$ a transition to $Z$ having passed the risk state without issue occurs. The boundary conditions are as follow, $I(0)=1$ representing the total population starting in the initial state. It follows that $X(t \le 0) = Y(0) = Z(0) = 0$. Also a constraint of $I+X+Y+Z=1$ exists at all time representing the fact that individuals can neither be created nor destroyed. Rates and Markov probabilities are related via $r = -log(1-p)/\tau$ and $p = 1-e^{-r\tau}$.
+
+Before proceeding into specific cases of the resulting time delay differential equation, the following is ODE form and solution are helpful:
+
+$$X' = f(t) - \gamma X$$
+$$X = e^{-\gamma t} \left[ c + \int e^{\gamma t} f(t) dt \right]$$
+
+Further it is trivial to derive $I(t) = e^{-\alpha t}$. We shall proceed to use the piecewise approach to solving the time delay equations.
+
+#### Case $t \le \tau$
+
+There is no time delay to worry about during this phase as no occupancy will exit to state $Z$. So a standard ODE suffices as the solution.
+
+$$
+\begin{split}
+X'   &= aI - \beta X \\
+X(t) &= e^{-\beta t} \left[ c + \int e^{\beta t} \alpha e^{-\alpha t} dt \right] \\
+     &= e^{-\beta t} \left[ c + \frac{\alpha}{\beta-\alpha} e^{(\beta-\alpha)t} \right] \\
+\end{split}
+$$
+
+Solving the constant from boundary conditions results in 
+$$ c = -\frac{\alpha}{\beta-\alpha} $$
+
+Therefore,
+
+$$ X(t) = \frac{\alpha}{\beta-\alpha}( e^{-\alpha t} - e^{-\beta t} ), \, t \le \tau$$
+
+#### Case $\tau \le t \le 2\tau$
+
+There exists competing outflow from $X$ between $Y$ and $Z$ in this case.
+
+$$
+X' = \underbrace{\alpha I}_\text{inflow}   -
+     \underbrace{\beta X}_\text{ext risk} -
+     \underbrace{e^{-\int_0^\tau \beta dt} }_\text{realized risk} 
+     \underbrace{\alpha e^{-\alpha (t-\tau)}}_\text{lag entry}
+$$
+
+Using the general solution form simplification of $f(t)$ is used.
+
+$$
+\begin{split}
+f(t) & = \alpha e^{-\alpha t} - e^{-\int_0^\tau \beta dt} a e^{-\alpha(t-\tau)} \\
+     & = \alpha e^{-\alpha t} (1 - e^{-\beta\tau}e^{\alpha\tau} ) \\
+     & = \alpha e^{-\alpha t} (1 - e^{(\alpha-\beta)\tau} ) \\
+\end{split}
+$$
+
+$$
+\begin{split}
+X(t) & = e^{-\beta t} \left[ c + \int e^{\beta t} \alpha e^{-\alpha t} (1 - e^{(\alpha-\beta)\tau} ) dt \right]\\
+     & = c e^{-\beta t} + \alpha ( 1-e^{(\alpha-\beta)\tau}) \int e^{(\beta+\alpha)t} dt \\
+     & = c e^{-\beta t} + \frac{\alpha}{\beta-\alpha} ( 1 - e^{(\alpha-\beta)\tau}) e^{-\alpha t} \\
+\end{split}
+$$
+Using the previous piecewise solution as the boundary condition, $c=0$ resulting in:
+
+$$
+X(t) = \frac{\alpha}{\beta-\alpha} ( 1 - e^{(\alpha-\beta)\tau}) e^{-\alpha t}
+$$
+
+#### Case 2$\tau \le t \le 3\tau$ and beyond
+
+This case results in the same exact answer as the previous, as will all following intervals. Thus the final solution of the equation is of the following form.
+
+$$
+X(t) = \begin{cases}
+       0 & t < 0 \\
+       \frac{\alpha}{\beta-\alpha} ( e^{-\alpha t} - e^{-\beta t} ) & 0 \le t < \tau \\
+       \frac{\alpha}{\beta-\alpha} ( 1 - e^{(\alpha-\beta)\tau}) e^{-\alpha t} & \tau \le t \\
+       \end{cases}
+$$
+
+So the first phase represents a "loading" phase where the time dependent state is experiencing entry and only the external risk. After the state is loaded the state occupancy time depency is only modified by $\alpha$ the rate of entry! The node is balanced across time.
+
+### Markov Correction
+
+The formula for the Markov chain occupancy can be divided by this solution to see how a correction factor can be derived that is linear across the range as demonstrated above.
+
+$$I_{MC}(t) = e^{- \alpha \lfloor t \rfloor}$$ 
+
+Because there is no residual occupancy of $X_{MC}$ it's just a single time step delay from $I_{MC}(t)$ and with a base conversion:
+
+$$
+X_{MC}(t) = \begin{cases}
+        0 & t<\tau \\
+        \alpha e^{- \lfloor t - \tau \rfloor \alpha} & t \ge \tau \\
+        \end{cases}
+$$
+The correction for $X_{MC}(t)$ can be formulated now using $X(t) = g(t) X_{MC}(t)$. Dropping the floor function and assuming $t$ is always in whole units of $\tau$. The following can be derived:
+
+$$
+g(t) = \frac{e^{-\alpha \tau} - e^{-\beta \tau}}{\beta-\alpha}
+$$
+
+Thus the correction function for $t \ge \tau$ has no dependence on time. Also the amount the $t < \tau$ term is off needs to skip directly into the risk bucket for that first cycle of the Markov chain. Likewise computation of $Y$ can be corrected as well.
+
+Exponential entry into a tunnel state can be handled entirely by simple adjustments, thus allowing for accurate modeling of tunnel states with memory inside a Markov solver.
+
+```{r}
+g <- function(a, b, t, tol=1e-8)
+  unname(ifelse(abs(b-a) < tol, 
+                t*exp(-a*t),
+                (exp(-a*t) - exp(-b*t)) / (b - a)))
+
+with(as.list(params), {
+
+  par(mfrow=c(1,2))
+  
+  curve(g(x, y_rate, lag), 
+        from = 0, to=1, 
+        main="g Correction Profile",
+        xlab=expression("Incoming Rate "*alpha),
+        ylab=expression("g Correction ("*beta*"=0.5)"))
+    
+  curve(g(x_rate, x, lag), 
+        from = 0, to=1, 
+        main="g Correction Profile",
+        xlab=expression("External Risk Rate "*beta),
+        ylab=expression("g Correction ("*alpha*"=0.1)"))
+})
+```
+```{r}
+x_t <- function(t)
+{
+  sc <- params['x_rate'] / (params['y_rate'] - params['x_rate'])
+  ifelse(t < 0, 0, 
+    ifelse(
+      t < params['lag'],
+      sc*(exp(-params['x_rate']*t)-exp(-params['y_rate']*t)),
+      sc*(1-exp((params['x_rate']-params['y_rate'])*params['lag']))*exp(-params['x_rate']*t)
+    )
+  )
+}
+cor1 <- g(params['x_rate'], params['y_rate'], params['lag'])
+curve(x_t, from=0, to=10)
+curve(ifelse(x < params['lag'], 0, params['x_rate']*cor1*exp(-floor(x-params['lag'])*params['x_rate'])), add=TRUE, col='red', n=501)
+```
+
+
+```{r}
+states <- c("i", "x", "y", "z")
+times  <- seq(0, horizon, by=1/365)
+
+cor1 <- g(params['a'], params['b'], params['lag'])
+cor2 <- 0.5817305
+
+probsG <- with(as.list(params), {
+  matrix(c(
+    1-a,                cor1*a,         (1-cor1)*a,     0,
+    0,                  0,              b*cor2,         1-cor2*b,
+    0,                  0,              1,              0,
+    0,                  0,              0,              1
+  ),
+  byrow=TRUE, nrow=4, dimnames=list(states, states)
+)})
+
+mcG <- new("markovchain", transitionMatrix=probsG, name="mcG")
+
+initial <- c(1, 0, 0, 0)
+
+mcG <- t(sapply(times, function(x) initial*mcG^x))
+mcG <- cbind(times, mcG)
+colnames(mcG) <- colnames(out)
+
+pvar <- function(x, mc)
+{
+  plot(times, out[,x], typ="l", xlab="", ylab="ratio", main=x, ylim=c(0,max(out[,x], mc[,x])))
+  lines(times, mc[,x], col='red')
+}
+
+par(mfrow=c(2,2))
+pvar("i", mcG)
+pvar("x", mcG)
+pvar("y", mcG)
+pvar("z", mcG)
+```
+
+### Correction factor for Y risk
+
+Similarly, we can derive a correction factor for the Y risk node.
+
+
+$$
+Y(t) = \frac{\beta}{\beta-\alpha} \begin{cases}
+       0 & t < 0 \\
+       1- e^{-\alpha t} + \frac{\alpha}{\beta}(e^{-\beta t}-1) & 0 \le t < \tau \\
+       (e^{(\alpha - \beta)\tau})e^{-\alpha t} + (e^{-\beta \tau}-1) (\frac{\alpha}{\beta} - 1) & \tau \le t \\
+       \end{cases}
+$$
+
+## Future Work
+
+* What if the incoming rate varies? Rederive
+* Demonstrate simplicity of solution in an algorithm that works on probability matrices.
+
