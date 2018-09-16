@@ -12,6 +12,7 @@ params <- list(
   resolution = 7/365,        # Time step for DEQ approach
   
   # Gompertz model of secular death for 40yr female
+  # fit from 2012 social security data
   shape   = 0.1007511,
   rate    = 0.0008370717,
   
@@ -37,5 +38,5 @@ params <- list(
   d_b   = 0.1,               # Disutility of B
   
   # Discounting
-  disc  = 0.03           # Annual
+  disc  = 0.03               # Annual Discount Rate
 )

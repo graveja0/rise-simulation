@@ -1,7 +1,5 @@
 library(deSolve)
 
-source("simple-params.R")
-
 # Vector must be 8 points or longer for alternate simpson integration
 alt_ext_simpson <- function(x)
   sum(c(17/48, 50/48, 43/48, 49/48, rep(1, length(x)-8), 49/48, 43/48, 50/48, 17/48)*x)
@@ -12,23 +10,28 @@ alt_ext_simpson <- function(x)
 genModel <- function(t, y, params)
 {
   with(as.list(c(y, params)), {
-    liv  <- sum(y[c("h_u","a_p","a_a","b_p","b_a")]) # All living...
     r_d <- rate*exp(shape*t) # Gompertz model of death from params
     
+    # exp(- integral of death risk from t-d_at to t)
+    death  <- if(t < d_at) 0 else exp(-rate*(exp(shape*t) - exp(shape*(t-d_at)))/shape)
+    left_p <- if(t < d_at) 0 else lagderiv(t-d_at, 7)*exp(-r_b*d_at)*death
+    left_a <- if(t < d_at) 0 else lagderiv(t-d_at, 8)*exp(-r_b*rr_b*d_at)*death
+    
     list(c(
-      h_u = (-r_a-r_d)*h_u,
-      a_p = r_a*(1-p_o*p_g)*h_u-r_b*a_p -r_d*a_p,
-      a_a = r_a*p_o*p_g*h_u-r_b*rr_b*a_a -r_d*a_a,
-      a_c = r_a*h_u,
-      a_l = r_d*a_q,
-      a_e = r_d*a_q - if(t < d_at) 0 else lagderiv(t-d_at, 6),
-      a_q = r_a*h_u - if(t < d_at) 0 else lagderiv(t-d_at, 5)*exp(-a_e),
-      b_p = r_b*(1-p_bd)*a_p-r_d*b_p,
-      b_a = r_b*rr_b*(1-p_bd)*a_a -r_d*b_a,
-      b_d = r_b*p_bd*a_p +r_b*rr_b*p_bd*a_a,
-      b_c = r_b*(1-p_bd)*a_p +r_b*rr_b*(1-p_bd)*a_a,
-      tests = p_o*r_a*h_u,
-      dsc = -disc_rate*dsc
+      h_u = (-r_a-r_d)*h_u,                            # Healthy Untested
+      a_p = r_a*(1-p_o*p_g)*h_u-r_b*a_p  -r_d*a_p,     # Indication Primary Treat
+      a_a = r_a*p_o*p_g*h_u-r_b*rr_b*a_a -r_d*a_a,     # Indication Alternate Treat
+      a_c = r_a*h_u,                                   # Cumulative Indications
+      a_dp = r_a*(1-p_o*p_g)*h_u-r_b*a_dp-r_d*a_dp-left_p, # Temporary Disutility of Indication Primary Occupation
+      a_da = r_a*p_o*p_g*h_u-r_b*rr_b*a_da-r_d*a_da-left_a, # Temporary Disutility of Indication Alternate Occupation
+      a_ep = r_a*(1-p_o*p_g)*h_u,                      # Helps compute leftover to clear from a_dp
+      a_ea = r_a*p_o*p_g*h_u,                          # Helps compute leftover to clear from a_da
+      b_p = r_b*(1-p_bd)*a_p-r_d*b_p,                  # Adverse Event Primary Treat
+      b_a = r_b*rr_b*(1-p_bd)*a_a -r_d*b_a,            # Adverse Event Alternate Treat
+      b_d = r_b*p_bd*a_p +r_b*rr_b*p_bd*a_a,           # Deaths from Adverse Event
+      b_c = r_b*(1-p_bd)*a_p +r_b*rr_b*(1-p_bd)*a_a,   # Cumulative Adverse Events
+      tests = p_o*r_a*h_u,                             # Cumulative Tests
+      dsc = -disc_rate*dsc                             # Discount Curve
     ))
   })
 }
@@ -59,12 +62,12 @@ deq_summary <- function(solution, params)
     # Total possible life units is integral of dscounted time
     pQALY <- alt_ext_simpson(life*solution[,"dsc"])*step
     
-    # Temp disutility of Indication
-    disA <- d_a*alt_ext_simpson(solution[,'a_q']*solution[,"dsc"])*step
-    
-    # Permanent disutility for Event
+    # Temp Disutility of Indication
+    disA <- d_a*alt_ext_simpson(solution[,'a_dp']*solution[,"dsc"])*step +
+            d_a*alt_ext_simpson(solution[,'a_da']*solution[,"dsc"])*step
+    # Permanent Disutility for Adverse Event
     disB <- d_b*alt_ext_simpson(solution[,'b_p']*solution[,"dsc"])*step + 
-      d_b*alt_ext_simpson(solution[,'b_a']*solution[,"dsc"])*step 
+            d_b*alt_ext_simpson(solution[,'b_a']*solution[,"dsc"])*step 
     
     c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
       dQALY       = unname(pQALY-disA-disB),
@@ -84,7 +87,7 @@ deq_simulation <- function(params)
 {
   params$disc_rate <- inst_rate(1-1/(1 + params$disc), 1)
   
-  init <- c(h_u=1, a_p=0, a_a=0, a_c=0, a_l=0, a_e=0, a_q=0, b_p=0, b_a=0, b_d=0, b_c=0, tests=0, dsc=1)
+  init  <- c(h_u=1, a_p=0, a_a=0, a_c=0, a_dp=0, a_da=0, a_ep=0, a_ea=0, b_p=0, b_a=0, b_d=0, b_c=0, tests=0, dsc=1)
   
   times <- seq(0, params$horizon, by=params$resolution)
   
@@ -107,5 +110,3 @@ deq_icer <- function(params)
      dQALY.test = unname(genotype['dQALY'])
   )
 }
-
-deq_icer(params)

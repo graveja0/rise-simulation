@@ -1,6 +1,6 @@
 library(flexsurv)
 
-source("simple-params.R")
+#source("simple-params.R")
 
 # Perform all random draws in the manner of Discrete Event Simulation
 # This can be done without larger frameworks due to simplicity of model
@@ -14,8 +14,9 @@ des_simulation <- function(params)
       indication    = rexp(n, r_a / 365)
     )
     
-    x$indication[x$secular_death > horizon*365]    <- NA
+
     x$secular_death[x$secular_death > horizon*365] <- NA
+    x$indication[x$indication > horizon*365]       <- NA
     x$indication[x$secular_death < x$indication]   <- NA
     x$tested <- !is.na(x$indication) * rbinom(n, 1, p_o)
     x$treat  <- NA
@@ -24,6 +25,7 @@ des_simulation <- function(params)
     
     rr <- ifelse(x$treat=="Alternate", rr_b, 1.0)
     x$adverse <- x$indication + suppressWarnings(rexp(n, r_b*rr/365))
+    x$adverse[is.nan(x$adverse)] <- NA
     x$adverse[x$adverse > horizon*365] <- NA
     x$adverse[x$secular_death < x$adverse] <- NA
     
@@ -38,21 +40,26 @@ des_simulation <- function(params)
     x$end_of_sim <- x$death
     x$end_of_sim[is.na(x$end_of_sim)] <- horizon*365
     
+    # Useful for computing temp disutility of A
+    x$cutoff <- x$indication + 365*d_at
+    x$cutoff <- ifelse(!is.na(x$cutoff) & !is.na(x$adverse) & x$adverse < x$cutoff, x$adverse, x$cutoff)
+    x$cutoff <- ifelse(!is.na(x$cutoff) & !is.na(x$secular_death) & x$secular_death < x$cutoff, x$secular_death, x$cutoff)
+    
     x
   })
 }
 
-# Discounted integral from A to B
+# Discounted integral from A to B at annual rate ar of discounting
 discount_int <- function(ar, A, B)
 {
   r <- (1 + ar)^(1/365)-1
   (exp(-r*A)-exp(-r*B)) / r
 }
 
-# Discounted integrals summed
+# Discounted Integral over interval
 disum <- function(disc, A, B) sum(discount_int(disc, A, B), na.rm=TRUE)
 
-# Discounted discrete sum
+# Discounted Discrete sum (aka single event discounting)
 # Each value is a time of event in units of days (365 per year)
 ddsum <- function(x, drate) sum(1 / ((1 + drate)^(x/365)), na.rm=TRUE)
 
@@ -74,16 +81,13 @@ des_summary <- function(df, params)
     life <- (n - sum(!is.na(death)))
 
     # Total possible discounted life units is integral of discounted time
-    pQALY <- disum(disc, 0, end_of_sim)
+    pQALY <- disum(disc, 0, end_of_sim) / 365
  
     # Temp disutility of Indication
-    cutoff <- indication + 365*d_at
-    cutoff <- ifelse(!is.na(cutoff) & !is.na(adverse) & adverse < cutoff, adverse, cutoff)
-    cutoff <- ifelse(!is.na(cutoff) & !is.na(adverse) & secular_death < cutoff, secular_death, cutoff)
-    disA   <- d_a*disum(disc, indication, cutoff)
+    disA   <- d_a*disum(disc, indication, cutoff) / 365
     
     # Permanent disutility for Event
-    disB   <- d_b*disum(disc, adverse, end_of_sim)
+    disB   <- d_b*disum(disc, adverse, end_of_sim) / 365
 
     c(dCOST       = unname(treat.cost+test.cost+drug.cost),
       dQALY       = unname(pQALY-disA-disB),
@@ -115,5 +119,3 @@ des_icer <- function(params)
      dQALY.test = unname(genotype['dQALY'])
   )
 }
-
-des_icer(params)
