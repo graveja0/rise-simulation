@@ -11,6 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 source("simple-params.R")
 source("simple-des.R")
 source("simple-deq.R")
+source("simple-markov.R")
 
 set.seed(1)
 
@@ -40,13 +41,15 @@ Comparison of DES and Diff Eq solutions to simplest model.
 ```{r compare_ind}
 des <- des_simulation(params)
 deq <- deq_simulation(params)
-
+mar <- markov_simulation(params)
 
 par(mfrow=c(1,2))
-# Overlay Indicate by DES and DEQ
+### Overlay Indicate by DES and DEQ
+# DEQ Results
 plot(deq[,'time'], deq[,'a_c']*100,
      type='l', lwd=2,
      ylab='Percent Population', xlab="t (year)", main="Total Indication")
+# the DES results
 ind.ordered <- sort(des$indication)
 sub <- seq(1, length(ind.ordered), by=1000)
 lines(ind.ordered[sub]/365, 100*sub/params$n, col='red', lty=2, lwd=2)
@@ -68,9 +71,12 @@ lines(x$time/365, 100*x$count/params$n, col='red', lty=2)
 
 ```{r compare_deaths}
 par(mfrow=c(1,2))
+### Indication Occupancy
+# DEQ
 plot(deq[,'time'], 100*rowSums(deq[,c('a_p','a_a')]),
      type='l', lwd=2,
      ylab='Percent Population', xlab="t (year)", main="Indication Occupancy")
+# DES
 end_of_ind <- pmin(des$adverse, des$death, na.rm=TRUE)
 end_of_ind[is.na(des$indication)] <- NA
 x <- data.frame(time=c(des$indication, end_of_ind),
@@ -79,11 +85,15 @@ x <- data.frame(time=c(des$indication, end_of_ind),
 x <- x[order(x$time,na.last=NA),]
 x$count <- cumsum(x$count)
 lines(x$time/365, 100*x$count/params$n, col='red', lty=2)
+# Markov
+lines(0:params$horizon, c(0,mar$combined_model$eval_strategy_list$reference$counts$A/10), col='blue', lty=3, lwd=2)
 
+### Adverse Deaths
+# DEQ
 plot(deq[,'time'], 100*deq[,'b_d'],
      type='l', lwd=2,
      ylab='Percent Population', xlab="t (year)", main="Adverse Deaths")
-
+# DES
 adv.deaths <- sort(des$adverse_death[!is.na(des$adverse_death)])
 sub <- seq(1, length(adv.deaths), by=10)
 lines(adv.deaths[sub]/365, 100*sub/params$n, col='red', lty=2, lwd=2)
