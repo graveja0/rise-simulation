@@ -14,6 +14,21 @@ source("simple-deq.R")
 
 ```
 
+## Model Description
+
+
+* A population of 40-year old women are at risk for both secular death and an indication (A) that happens at a 10% rate over a 10-year period.
+* All those who experience the event incur a cost of $10,000.
+* Those who experience the event experience a 0.05 utility decrement for 1 year, and are placed on a drug for life that costs $0.5/day.
+* There is an adverse event (B) that occurs downstream of indication A, with probability 0.02 over a 1-year period.
+* Adverse Event B has a 5% case fatality rate with a $15,000 cost among the decedents and, among the survivors, incurs a $25,000 cost and a 0.1 disutility for life.
+* There is a test available that, if the person tests positive for increased risk (prevalence is 0.2), results in an alternative drug (for life) that costs $5/day but reduces the rate of the second event by a relative risk of 0.7.
+* Indication and adverse events are not recurrent.
+* We are going to compare two strategies: "Reference" (no testing) vs “Testing” (Testing at the time of indication A).
+* Standard annual discounting of 0.03 applies.
+
+![Model Diagram](./Simplest-Model.png)
+
 ## Visual comparison of DES and DiffEq
 
 Comparison of DES and Diff Eq solutions to simplest model.
