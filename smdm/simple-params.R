@@ -5,12 +5,13 @@ inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
 ## Standardized Parameter List for Simple Model Comparison
 ##
 params <- list(
-  # Control
-  n       = 100000,          # DES simulations to perform
-  horizon = 40,              # Time horizon of simulation
-  wtp     = 100000,          # Willingness to pay threshold
-  resolution = 7/365,        # Time step for DEQ approach
-  
+  # Controls for model execution
+  n          = 100000,       # DES simulations to perform
+  resolution = 7/365,        # Diff Eq Time step for DEQ approach
+  interval   = 1,            # Markov Interval
+  horizon    = 40,           # Time horizon of simulation
+  wtp        = 100000,       # Willingness to pay threshold
+
   # Gompertz model of secular death for 40yr female
   # fit from 2012 social security data
   shape   = 0.1007511,
