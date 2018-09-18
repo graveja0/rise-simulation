@@ -38,13 +38,16 @@ Comparison of DES and Diff Eq solutions to simplest model.
 
 ### Indication
 
-```{r compare_ind}
+```{r raw_model_runs}
 des <- des_simulation(params)
 deq <- deq_simulation(params)
 mar <- markov_simulation(params)
+```
+
+```{r compare_ind}
 
 par(mfrow=c(1,2))
-### Overlay Indicate by DES and DEQ
+### Overlay Total Indication
 # DEQ Results
 plot(deq[,'time'], deq[,'a_c']*100,
      type='l', lwd=2,
@@ -53,13 +56,16 @@ plot(deq[,'time'], deq[,'a_c']*100,
 ind.ordered <- sort(des$indication)
 sub <- seq(1, length(ind.ordered), by=1000)
 lines(ind.ordered[sub]/365, 100*sub/params$n, col='red', lty=2, lwd=2)
+# Markov
+lines(0:params$horizon, cumsum(c(0,mar$combined_model$eval_strategy_list$reference$values$A_acc/10)), col='blue', lty=3, lwd=2)
 
-# Let's look at A disutility occupancy
+###  Overlay Disutility
+# DEQ
 plot(deq[,'time'], 100*rowSums(deq[,c('a_dp','a_da')]),
      type='l', lwd=2,
      ylab='Percent Population', xlab="t (year)",
-     main="Indication Disutility", ylim=c(0, 1.1))
-
+     main="Indication Disutility Occupancy", ylim=c(0, 1.1))
+# DES
 x <- data.frame(time=c(des$indication, des$cutoff),
                 count=c(rep(1,  length(des$indication)),
                         rep(-1, length(des$cutoff))))
@@ -67,6 +73,9 @@ x$time[x$time == params$horizon*365] <- NA
 x <- x[order(x$time,na.last=NA),]
 x$count <- cumsum(x$count)
 lines(x$time/365, 100*x$count/params$n, col='red', lty=2)
+# Markov
+lines(c(0,1,1:params$horizon),     
+      c(0,0,mar$combined_model$eval_strategy_list$reference$values$A_acc/10),        col='blue', lty=3, lwd=2)
 ```
 
 ```{r compare_deaths}
@@ -97,6 +106,9 @@ plot(deq[,'time'], 100*deq[,'b_d'],
 adv.deaths <- sort(des$adverse_death[!is.na(des$adverse_death)])
 sub <- seq(1, length(adv.deaths), by=10)
 lines(adv.deaths[sub]/365, 100*sub/params$n, col='red', lty=2, lwd=2)
+# Markov
+lines(c(0,1,1:params$horizon),     
+      c(0,0,mar$combined_model$eval_strategy_list$reference$counts$BD/10),        col='blue', lty=3, lwd=2)
 ```
 
 ## Compare End Results
