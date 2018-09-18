@@ -70,7 +70,8 @@ markov_simulation <- function(params)
   #states
   state_H <- define_state(
     cost = 0,
-    QALY = discount(1,dr)
+    QALY = discount(1,dr),
+    A_acc = 0
   )
   
   state_A <- define_state(
@@ -78,7 +79,8 @@ markov_simulation <- function(params)
       standard=costA*ifelse(state_time<=1,1,0)+costDrug,
       genotype=costA*ifelse(state_time<=1,1,0)+cDgenotype
     ), dr),
-    QALY = discount(1-disuA*ifelse(state_time<=params$interval,1,0),dr)
+    QALY = discount(1-disuA*ifelse(state_time<=params$interval,1,0),dr),
+    A_acc = ifelse(state_time<=1,1,0)
   )
   
   
@@ -87,17 +89,20 @@ markov_simulation <- function(params)
       standard=costBS*ifelse(state_time<=1,1,0)+costDrug,
       genotype=costBS*ifelse(state_time<=1,1,0)+cDgenotype
     ), dr),
-    QALY = discount(1-disuB,dr)
+    QALY = discount(1-disuB,dr),
+    A_acc = 0
   )
   
   state_BD <- define_state(
     cost = discount(costBD*ifelse(state_time<=1,1,0),dr),
-    QALY = 0
+    QALY = 0,
+    A_acc = 0
   )
   
   state_D <- define_state(
     cost = 0,
-    QALY = 0
+    QALY = 0,
+    A_acc = 0
   )
   
   # binding 
@@ -136,7 +141,8 @@ markov_simulation <- function(params)
   res_h <- update(res_mod, newdata = pop)
   
   # compare
-  res_h$combined_model$run_model
+  #res_h$combined_model$run_model
+  res_h
 }
 
 
