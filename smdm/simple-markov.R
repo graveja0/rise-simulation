@@ -48,7 +48,7 @@ markov_simulation <- function(params)
   )
   
   #transition matrix
-  mat_standard <- define_transition(
+  mat_reference <- define_transition(
     state_names = c("H","A","BS","BD","D"),
     C,pA,0,0,pD,
     0,C,pBS,pBD,pD,
@@ -76,7 +76,7 @@ markov_simulation <- function(params)
   
   state_A <- define_state(
     cost = discount(dispatch_strategy(
-      standard=costA*ifelse(state_time<=1,1,0)+costDrug,
+      reference=costA*ifelse(state_time<=1,1,0)+costDrug,
       genotype=costA*ifelse(state_time<=1,1,0)+cDgenotype
     ), dr),
     QALY = discount(1-disuA*ifelse(state_time<=params$interval,1,0),dr),
@@ -86,7 +86,7 @@ markov_simulation <- function(params)
   
   state_BS <- define_state(
     cost = discount(dispatch_strategy(
-      standard=costBS*ifelse(state_time<=1,1,0)+costDrug,
+      reference=costBS*ifelse(state_time<=1,1,0)+costDrug,
       genotype=costBS*ifelse(state_time<=1,1,0)+cDgenotype
     ), dr),
     QALY = discount(1-disuB,dr),
@@ -106,8 +106,8 @@ markov_simulation <- function(params)
   )
   
   # binding 
-  strat_standard <- define_strategy(
-    transition = mat_standard,
+  strat_reference <- define_strategy(
+    transition = mat_reference,
     H=state_H,
     A=state_A,
     BS=state_BS,
@@ -126,10 +126,10 @@ markov_simulation <- function(params)
   
   # run
   res_mod <- run_model(
-    standard=strat_standard,
+    reference=strat_reference,
     genotype=strat_genotype,
     parameters = param,
-    cycles = 85*params$interval,
+    cycles = params$horizon*params$interval,
     cost = cost,
     effect = QALY,
     state_time_limit=params$interval,
@@ -137,23 +137,21 @@ markov_simulation <- function(params)
   )
   
   ### add gene prevalence
-  pop   <- data.frame(gene=c(0,1), .weights=c(80,20))
+  pop   <- data.frame(gene=c(0,1), .weights=c(100-params$p_g*100,params$p_g*100))
   res_h <- update(res_mod, newdata = pop)
   
-  # compare
   #res_h$combined_model$run_model
   res_h
 }
 
-
-
 # Goal: dCOST    dQALY possible     fatal_b    living   disutil_a disutil_b dCOST.test dCOST.drug dCOST.treat
 markov_summary <- function(solution, params)
 {
-  solution %>% dplyr::mutate(ICER=diff(cost)/diff(QALY)*params$interval) %>% data.frame()
+  solution$combined_model$run_model %>%
+  dplyr::mutate(ICER=diff(cost)/diff(QALY)*params$interval) %>%
+  data.frame()
 }
 
-# Goal: ICER         NMB   dCOST.ref  dCOST.test   dQALY.ref  dQALY.test 
 markov_icer <- function(params)
 {
   ot <- markov_summary(markov_simulation(params), params)

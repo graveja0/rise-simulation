@@ -44,6 +44,7 @@ des_simulation <- function(params)
     x$cutoff <- x$indication + 365*d_at
     x$cutoff <- ifelse(!is.na(x$cutoff) & !is.na(x$adverse) & x$adverse < x$cutoff, x$adverse, x$cutoff)
     x$cutoff <- ifelse(!is.na(x$cutoff) & !is.na(x$secular_death) & x$secular_death < x$cutoff, x$secular_death, x$cutoff)
+    x$cutoff[x$cutoff > horizon*365] <- horizon*365
     
     x
   })
