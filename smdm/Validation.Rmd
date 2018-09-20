@@ -13,7 +13,7 @@ source("simple-des.R")
 source("simple-deq.R")
 source("simple-markov.R")
 
-set.seed(2)
+set.seed(1)
 
 ```
 
@@ -57,14 +57,14 @@ ind.ordered <- sort(des$indication)
 sub <- seq(1, length(ind.ordered), by=1000)
 lines(ind.ordered[sub]/365, 100*sub/params$n, col='red', lty=2, lwd=2)
 # Markov
-lines(0:params$horizon, cumsum(c(0,mar$combined_model$eval_strategy_list$reference$values$A_acc/10)), col='blue', lty=3, lwd=2)
+lines(0:params$horizon, c(0, cumsum(mar$combined_model$eval_strategy_list$reference$values$A_acc/10))[(0:params$horizon)*params$interval+1], col='blue', lty=3, lwd=2)
 
 ###  Overlay Disutility
 # DEQ
 plot(deq[,'time'], 100*rowSums(deq[,c('a_dp','a_da')]),
      type='l', lwd=2,
      ylab='Percent Population', xlab="t (year)",
-     main="Indication Disutility Occupancy", ylim=c(0, 1.1))
+     main="Indication Disutility Occupancy", ylim=c(0, 1.1*params$d_at))
 # DES
 x <- data.frame(time=c(des$indication, des$cutoff),
                 count=c(rep(1,  length(des$indication)),
@@ -75,7 +75,8 @@ x$count <- cumsum(x$count)
 lines(x$time/365, 100*x$count/params$n, col='red', lty=2)
 # Markov
 lines(c(0,1,1:params$horizon),     
-      c(0,0,mar$combined_model$eval_strategy_list$reference$values$A_acc/10),        col='blue', lty=3, lwd=2)
+      c(0,0,mar$combined_model$eval_strategy_list$reference$values$A_du_acc[(1:params$horizon)*params$interval]/10),        col='blue', lty=3, lwd=2)
+
 ```
 
 ```{r compare_deaths}
@@ -95,7 +96,7 @@ x <- x[order(x$time,na.last=NA),]
 x$count <- cumsum(x$count)
 lines(x$time/365, 100*x$count/params$n, col='red', lty=2)
 # Markov
-lines(0:params$horizon, c(0,mar$combined_model$eval_strategy_list$reference$counts$A/10), col='blue', lty=3, lwd=2)
+lines(0:params$horizon, c(0,mar$combined_model$eval_strategy_list$reference$counts$A/10)[(0:params$horizon)*params$interval+1], col='blue', lty=3, lwd=2)
 
 ### Adverse Deaths
 # DEQ
@@ -108,7 +109,8 @@ sub <- seq(1, length(adv.deaths), by=10)
 lines(adv.deaths[sub]/365, 100*sub/params$n, col='red', lty=2, lwd=2)
 # Markov
 lines(c(0,1,1:params$horizon),     
-      c(0,0,mar$combined_model$eval_strategy_list$reference$counts$BD/10),        col='blue', lty=3, lwd=2)
+      c(0,0,mar$combined_model$eval_strategy_list$reference$counts$BD[(1:params$horizon)*params$interval]/10),
+      col='blue', lty=3, lwd=2)
 ```
 
 ## Compare End Results

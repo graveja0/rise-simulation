@@ -112,8 +112,8 @@ des_icer <- function(params)
   params$p_o <- 1.0 # Genotype testing upon indication
   genotype   <- des_summary(des_simulation(params), params)
 
-  c( ICER       = unname((reference['dCOST'] - genotype['dCOST']) / (reference['dQALY'] - genotype['dQALY'])),
-     NMB        = unname((reference['dCOST'] - genotype['dCOST']) + params$wtp*(reference['dQALY'] - genotype['dQALY'])),
+  c( ICER       = unname((genotype['dCOST'] - reference['dCOST']) / (genotype['dQALY'] - reference['dQALY'])),
+     NMB        = unname((reference['dCOST'] - genotype['dCOST']) + params$wtp*(genotype['dQALY'] - reference['dQALY'])),
      dCOST.ref  = unname(reference['dCOST']),
      dCOST.test = unname(genotype['dCOST']),
      dQALY.ref  = unname(reference['dQALY']),

@@ -80,6 +80,7 @@ markov_simulation <- function(params)
     
     # Diagnostics
     A_acc    = 0,
+    A_du_acc = 0,
     living   = 1,
     possible = discount(1, dr),
     fatal_b  = 0,
@@ -94,20 +95,21 @@ markov_simulation <- function(params)
   # Indication 
   state_A <- define_state(
     cost = discount(dispatch_strategy(
-      reference=costA*ifelse(state_time<=params$interval,1,0)+costDrug,
-      genotype=costA*ifelse(state_time<=params$interval,1,0)+ifelse(state_time<=params$interval,costTest,0)+cDgenotype
+      reference=costA*ifelse(state_time==1,1,0)+costDrug,
+      genotype=costA*ifelse(state_time==1,1,0)+ifelse(state_time==1,costTest,0)+cDgenotype
     ), dr),
-    QALY   = discount(1-disuA*ifelse(state_time<=params$interval,1,0),dr),
+    QALY   = discount(1-disuA*ifelse(state_time<=params$d_at*params$interval,1,0),dr),
     
     # Diagnostics
-    A_acc    = ifelse(state_time<=params$interval,1,0),
+    A_acc    = ifelse(state_time==1,1,0),
+    A_du_acc = ifelse(state_time<=params$d_at*params$interval,1/params$interval,0),
     living   = 1,
     possible = discount(1, dr),
     fatal_b  = 0,
-    cost_g   = discount(ifelse(state_time<=params$interval,costTest,0), dr),
+    cost_g   = discount(ifelse(state_time==1,costTest,0), dr),
     cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
-    cost_tx  = discount(costA*ifelse(state_time<=params$interval,1,0), dr),
-    dis_a    = discount(disuA*ifelse(state_time<=params$interval,1,0), dr),
+    cost_tx  = discount(costA*ifelse(state_time==1,1,0), dr),
+    dis_a    = discount(disuA*ifelse(state_time<=params$d_at*params$interval,1/params$interval,0), dr),
     dis_b    = 0
   )
   
@@ -115,37 +117,39 @@ markov_simulation <- function(params)
   # Adverse Event Survivor
   state_BS <- define_state(
     cost = discount(dispatch_strategy(
-      reference=costBS*ifelse(state_time<=params$interval,1,0)+costDrug,
-      genotype=costBS*ifelse(state_time<=params$interval,1,0)+cDgenotype
+      reference=costBS*ifelse(state_time==1,1,0)+costDrug,
+      genotype=costBS*ifelse(state_time==1,1,0)+cDgenotype
     ), dr),
     QALY = discount(1-disuB,dr),
     
     # Diagnostics
     A_acc    = 0,
+    A_du_acc = 0,
     living   = 1,
     possible = discount(1, dr),
     fatal_b  = 0,
     cost_g   = 0,
     cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
-    cost_tx  = discount(costBS*ifelse(state_time<=params$interval,1,0), dr),
+    cost_tx  = discount(costBS*ifelse(state_time==1,1,0), dr),
     dis_a    = 0,
-    dis_b    = discount(disuB, dr)
+    dis_b    = discount(disuB/params$interval, dr)
   )
 
   ####################
   # Adverse Event Death
   state_BD <- define_state(
-    cost = discount(costBD*ifelse(state_time<=params$interval,1,0),dr),
+    cost = discount(costBD*ifelse(state_time==1,1,0),dr),
     QALY = 0,
     
     # Diagnostics
     A_acc    = 0,
+    A_du_acc = 0,
     living   = 0,
     possible = 0,
-    fatal_b  = ifelse(state_time <= params$interval,1,0),
+    fatal_b  = ifelse(state_time==1,1,0),
     cost_g   = 0,
     cost_d   = 0,
-    cost_tx  = discount(costBD*ifelse(state_time<=params$interval,1,0), dr),
+    cost_tx  = discount(costBD*ifelse(state_time==1,1,0), dr),
     dis_a    = 0,
     dis_b    = 0
   )
@@ -158,6 +162,7 @@ markov_simulation <- function(params)
     
     # Diagnostics
     A_acc    = 0,
+    A_du_acc = 0,
     living   = 0,
     possible = 0,
     fatal_b  = 0,
@@ -236,8 +241,8 @@ markov_icer <- function(params)
   params$p_o <- 1
   genotype   <- markov_summary(solution, params)
 
-  c( ICER       = unname((reference['dCOST'] - genotype['dCOST']) / (reference['dQALY'] - genotype['dQALY'])),
-     NMB        = unname((reference['dCOST'] - genotype['dCOST']) + params$wtp*(reference['dQALY'] - genotype['dQALY'])),
+  c( ICER       = unname((genotype['dCOST'] - reference['dCOST']) / (genotype['dQALY'] - reference['dQALY'])),
+     NMB        = unname((reference['dCOST'] - genotype['dCOST']) + params$wtp*(genotype['dQALY'] - reference['dQALY'])),
      dCOST.ref  = unname(reference['dCOST']),
      dCOST.test = unname(genotype['dCOST']),
      dQALY.ref  = unname(reference['dQALY']),
@@ -245,4 +250,4 @@ markov_icer <- function(params)
   )
 }
 
-markov_icer(params)
+#markov_icer(params)
