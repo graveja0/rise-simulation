@@ -18,7 +18,7 @@ des_simulation <- function(params)
     x$secular_death[x$secular_death > horizon*365] <- NA
     x$indication[x$indication > horizon*365]       <- NA
     x$indication[x$secular_death < x$indication]   <- NA
-    x$tested <- !is.na(x$indication) * rbinom(n, 1, p_o)
+    x$tested <- !is.na(x$indication)  & rbinom(n, 1, p_o)
     x$treat  <- NA
     x$treat[!is.na(x$indication)] <- "Primary"
     x$treat[!is.na(x$indication) & x$tested & x$variant] <- "Alternate"
@@ -68,7 +68,7 @@ des_summary <- function(df, params)
 {
   with(c(df, params), {
     # Testing costs
-    test.cost  <- c_t  * ddsum(indication, disc)
+    test.cost  <- c_t  * ddsum(indication[tested], disc)
     treat.cost <- c_a  * ddsum(indication, disc) + 
                   c_bs * ddsum(adverse[is.na(adverse_death)], disc) +
                   c_bd * ddsum(adverse_death, disc) 

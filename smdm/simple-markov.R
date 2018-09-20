@@ -24,6 +24,7 @@ markov_simulation <- function(params)
     disuA    = params$d_a,
     costDrug = 365*params$c_tx/params$interval,
     costAlt  = 365*params$c_alt/params$interval,
+    costTest = params$p_o * params$c_t,
     costBS   = params$c_bs,
     disuB    = params$d_b,
     costBD   = params$c_bd,
@@ -33,15 +34,18 @@ markov_simulation <- function(params)
     t0 = (model_time-1)/params$interval,
     
     pD = map2_dbl(t0,t1,~gompertz_ratio(t0=.x,t1=.y,shape=params$shape,rate=params$rate)),
-    pA = map_dbl(pD,~cap_max(value=rescale_prob(p=0.1,from=10,to=1/params$interval),sd=.x)),
-    pB = map_dbl(pD,~cap_max(value=rescale_prob(p=0.02,from=1,to=1/params$interval),sd=.x)),
+    pA = map_dbl(pD,~cap_max(value=rate_to_prob(params$r_a,1/params$interval),sd=.x)),
+    pB = map_dbl(pD,~cap_max(value=rate_to_prob(params$r_b,1/params$interval),sd=.x)),
     
     fatalB = params$p_bd,
     pBS = pB*(1-fatalB),
     pBD = pB*fatalB,
     
     gene = 1, #0 or 1
-    rr = 1-params$rr_b*gene,
+    # Question for Zilu, why is this inverted?
+    # Further question, why is it not inside a map_dbl
+    #rr = 1-params$rr_b*gene, 
+    rr = map_dbl(gene, function(x) ifelse(x==0, 1, params$rr_b)),
     
     #just for genotype strategy
     cDgenotype = map_dbl(gene, function(x) ifelse(x==0,costDrug,costAlt))
@@ -67,42 +71,101 @@ markov_simulation <- function(params)
   )
   
   dr <- rescale_discount_rate(params$disc,from=params$interval,to=1) # discounting rate
-  #states
+  
+  ####################
+  # Healthy
   state_H <- define_state(
-    cost = 0,
-    QALY = discount(1,dr),
-    A_acc = 0
+    cost     = 0,
+    QALY     = discount(1,dr),
+    
+    # Diagnostics
+    A_acc    = 0,
+    living   = 1,
+    possible = discount(1, dr),
+    fatal_b  = 0,
+    cost_g   = 0,
+    cost_d   = 0,
+    cost_tx  = 0,
+    dis_a    = 0,
+    dis_b    = 0
   )
   
+  ####################
+  # Indication 
   state_A <- define_state(
     cost = discount(dispatch_strategy(
-      reference=costA*ifelse(state_time<=1,1,0)+costDrug,
-      genotype=costA*ifelse(state_time<=1,1,0)+cDgenotype
+      reference=costA*ifelse(state_time<=params$interval,1,0)+costDrug,
+      genotype=costA*ifelse(state_time<=params$interval,1,0)+ifelse(state_time<=params$interval,costTest,0)+cDgenotype
     ), dr),
-    QALY = discount(1-disuA*ifelse(state_time<=params$interval,1,0),dr),
-    A_acc = ifelse(state_time<=1,1,0)
+    QALY   = discount(1-disuA*ifelse(state_time<=params$interval,1,0),dr),
+    
+    # Diagnostics
+    A_acc    = ifelse(state_time<=params$interval,1,0),
+    living   = 1,
+    possible = discount(1, dr),
+    fatal_b  = 0,
+    cost_g   = discount(ifelse(state_time<=params$interval,costTest,0), dr),
+    cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
+    cost_tx  = discount(costA*ifelse(state_time<=params$interval,1,0), dr),
+    dis_a    = discount(disuA*ifelse(state_time<=params$interval,1,0), dr),
+    dis_b    = 0
   )
   
-  
+  ####################
+  # Adverse Event Survivor
   state_BS <- define_state(
     cost = discount(dispatch_strategy(
-      reference=costBS*ifelse(state_time<=1,1,0)+costDrug,
-      genotype=costBS*ifelse(state_time<=1,1,0)+cDgenotype
+      reference=costBS*ifelse(state_time<=params$interval,1,0)+costDrug,
+      genotype=costBS*ifelse(state_time<=params$interval,1,0)+cDgenotype
     ), dr),
     QALY = discount(1-disuB,dr),
-    A_acc = 0
+    
+    # Diagnostics
+    A_acc    = 0,
+    living   = 1,
+    possible = discount(1, dr),
+    fatal_b  = 0,
+    cost_g   = 0,
+    cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
+    cost_tx  = discount(costBS*ifelse(state_time<=params$interval,1,0), dr),
+    dis_a    = 0,
+    dis_b    = discount(disuB, dr)
   )
-  
+
+  ####################
+  # Adverse Event Death
   state_BD <- define_state(
-    cost = discount(costBD*ifelse(state_time<=1,1,0),dr),
+    cost = discount(costBD*ifelse(state_time<=params$interval,1,0),dr),
     QALY = 0,
-    A_acc = 0
+    
+    # Diagnostics
+    A_acc    = 0,
+    living   = 0,
+    possible = 0,
+    fatal_b  = ifelse(state_time <= params$interval,1,0),
+    cost_g   = 0,
+    cost_d   = 0,
+    cost_tx  = discount(costBD*ifelse(state_time<=params$interval,1,0), dr),
+    dis_a    = 0,
+    dis_b    = 0
   )
   
+  ####################
+  # Secular Death
   state_D <- define_state(
-    cost = 0,
-    QALY = 0,
-    A_acc = 0
+    cost     = 0,
+    QALY     = 0,
+    
+    # Diagnostics
+    A_acc    = 0,
+    living   = 0,
+    possible = 0,
+    fatal_b  = 0,
+    cost_g   = 0,
+    cost_d   = 0,
+    cost_tx  = 0,
+    dis_a    = 0,
+    dis_b    = 0
   )
   
   # binding 
@@ -140,30 +203,46 @@ markov_simulation <- function(params)
   pop   <- data.frame(gene=c(0,1), .weights=c(100-params$p_g*100,params$p_g*100))
   res_h <- update(res_mod, newdata = pop)
   
-  #res_h$combined_model$run_model
   res_h
 }
 
-# Goal: dCOST    dQALY possible     fatal_b    living   disutil_a disutil_b dCOST.test dCOST.drug dCOST.treat
 markov_summary <- function(solution, params)
 {
-  solution$combined_model$run_model %>%
-  dplyr::mutate(ICER=diff(cost)/diff(QALY)*params$interval) %>%
-  data.frame()
+  model <- if(params$p_o == 0.0) solution$combined_model$eval_strategy_list$reference else
+           if(params$p_o == 1.0) solution$combined_model$eval_strategy_list$genotype  else
+           stop("Probability of ordering test as a ratio not handled")
+
+  summary <- if(params$p_o == 0.0) data.frame(solution$combined_model$run_model[1,]) else
+                                   data.frame(solution$combined_model$run_model[2,])
+  
+  c(dCOST       = unname(summary[1,'cost']),
+    dQALY       = unname(summary[1,'QALY']/params$interval),
+    possible    = unname(sum(model$values$possible)/params$interval),
+    fatal_b     = unname(sum(model$values$fatal_b)),
+    living      = unname(model$values$living[length(model$values$living)]),
+    disutil_a   = unname(sum(model$values$dis_a)),
+    disutil_b   = unname(sum(model$values$dis_b)),
+    dCOST.test  = unname(sum(model$values$cost_g)),
+    dCOST.drug  = unname(sum(model$values$cost_d)),
+    dCOST.treat = unname(sum(model$values$cost_tx))
+  )/1000
 }
 
 markov_icer <- function(params)
 {
-  ot <- markov_summary(markov_simulation(params), params)
-  ot <- select(ot, strategy=.strategy_names,cost,QALY) %>%
-        mutate(cost=cost/1000,QALY=QALY/(1000*params$interval))
-  c(ICER=(ot$cost[2]-ot$cost[1])/(ot$QALY[2]-ot$QALY[1]),
-    NMB=unname((ot$cost[1] - ot$cost[2]) + params$wtp*(ot$QALY[1] - ot$QALY[2])),
-    dCOST.ref=ot$cost[1],
-    dCOST.test=ot$cost[2],
-    dQALY.ref=ot$QALY[1],
-    dQALY.test=ot$QALY[2]
-    )
+  solution   <- markov_simulation(params)
+  params$p_o <- 0
+  reference  <- markov_summary(solution, params)
+  params$p_o <- 1
+  genotype   <- markov_summary(solution, params)
+
+  c( ICER       = unname((reference['dCOST'] - genotype['dCOST']) / (reference['dQALY'] - genotype['dQALY'])),
+     NMB        = unname((reference['dCOST'] - genotype['dCOST']) + params$wtp*(reference['dQALY'] - genotype['dQALY'])),
+     dCOST.ref  = unname(reference['dCOST']),
+     dCOST.test = unname(genotype['dCOST']),
+     dQALY.ref  = unname(reference['dQALY']),
+     dQALY.test = unname(genotype['dQALY'])
+  )
 }
 
 markov_icer(params)
