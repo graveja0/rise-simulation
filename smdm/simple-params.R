@@ -6,9 +6,9 @@ inst_rate <- function(percent, timeframe) -log(1-percent) / timeframe
 ##
 params <- list(
   # Controls for model execution
-  n          = 10000,       # DES simulations to perform
+  n          = 1000000,      # DES simulations to perform
   resolution = 7/365,        # Diff Eq Time step for DEQ approach
-  interval   = 12,           # Markov Interval
+  interval   = 1,            # Markov Interval
   horizon    = 40,           # Time horizon of simulation
   wtp        = 100000,       # Willingness to pay threshold
 
@@ -35,7 +35,7 @@ params <- list(
   
   # Disutilities
   d_a   = 0.05,              # Disutility of A
-  d_at  = 3,                 # Duration of A in years.
+  d_at  = 1,                 # Duration of A in years.
   d_b   = 0.1,               # Disutility of B
   
   # Discounting
