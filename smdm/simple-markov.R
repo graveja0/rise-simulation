@@ -21,12 +21,12 @@ markov_simulation <- function(params)
 {
   param <- define_parameters(
     costA    = params$c_a,
-    disuA    = params$d_a,
+    disuA    = params$d_a/params$interval,
     costDrug = 365*params$c_tx/params$interval,
     costAlt  = 365*params$c_alt/params$interval,
     costTest = params$p_o * params$c_t,
     costBS   = params$c_bs,
-    disuB    = params$d_b,
+    disuB    = params$d_b/params$interval,
     costBD   = params$c_bd,
     
     age_init = 40,
@@ -95,21 +95,21 @@ markov_simulation <- function(params)
   # Indication 
   state_A <- define_state(
     cost = discount(dispatch_strategy(
-      reference=costA*ifelse(state_time==1,1,0)+costDrug,
-      genotype=costA*ifelse(state_time==1,1,0)+ifelse(state_time==1,costTest,0)+cDgenotype
+      reference=ifelse(state_time==1,costA,0)+costDrug,
+      genotype =ifelse(state_time==1,costA,0)+ifelse(state_time==1,costTest,0)+cDgenotype
     ), dr),
-    QALY   = discount(1-disuA*ifelse(state_time<=params$d_at*params$interval,1,0),dr),
+    QALY   = discount(ifelse(state_time<=params$d_at*params$interval,1/params$interval - disuA,1/params$interval),dr),
     
     # Diagnostics
     A_acc    = ifelse(state_time==1,1,0),
-    A_du_acc = ifelse(state_time<=params$d_at*params$interval,1/params$interval,0),
+    A_du_acc = ifelse(state_time<=params$d_at*params$interval,1,0), # How many in disutility state
     living   = 1,
     possible = discount(1, dr),
     fatal_b  = 0,
     cost_g   = discount(ifelse(state_time==1,costTest,0), dr),
     cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
-    cost_tx  = discount(costA*ifelse(state_time==1,1,0), dr),
-    dis_a    = discount(disuA*ifelse(state_time<=params$d_at*params$interval,1/params$interval,0), dr),
+    cost_tx  = discount(ifelse(state_time==1,costA,0), dr),
+    dis_a    = discount(ifelse(state_time<=params$interval*params$d_at,disuA,0), dr),
     dis_b    = 0
   )
   
@@ -117,10 +117,10 @@ markov_simulation <- function(params)
   # Adverse Event Survivor
   state_BS <- define_state(
     cost = discount(dispatch_strategy(
-      reference=costBS*ifelse(state_time==1,1,0)+costDrug,
-      genotype=costBS*ifelse(state_time==1,1,0)+cDgenotype
+      reference=ifelse(state_time==1,costBS,0)+costDrug,
+      genotype=ifelse(state_time==1,costBS,0)+cDgenotype
     ), dr),
-    QALY = discount(1-disuB,dr),
+    QALY = discount(1/params$interval-disuB,dr),
     
     # Diagnostics
     A_acc    = 0,
@@ -130,15 +130,15 @@ markov_simulation <- function(params)
     fatal_b  = 0,
     cost_g   = 0,
     cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
-    cost_tx  = discount(costBS*ifelse(state_time==1,1,0), dr),
+    cost_tx  = discount(ifelse(state_time==1,costBS,0), dr),
     dis_a    = 0,
-    dis_b    = discount(disuB/params$interval, dr)
+    dis_b    = discount(disuB, dr)
   )
 
   ####################
   # Adverse Event Death
   state_BD <- define_state(
-    cost = discount(costBD*ifelse(state_time==1,1,0),dr),
+    cost = discount(ifelse(state_time==1,costBD,0),dr),
     QALY = 0,
     
     # Diagnostics
@@ -149,7 +149,7 @@ markov_simulation <- function(params)
     fatal_b  = ifelse(state_time==1,1,0),
     cost_g   = 0,
     cost_d   = 0,
-    cost_tx  = discount(costBD*ifelse(state_time==1,1,0), dr),
+    cost_tx  = discount(ifelse(state_time==1,costBD,0), dr),
     dis_a    = 0,
     dis_b    = 0
   )
@@ -200,8 +200,8 @@ markov_simulation <- function(params)
     cycles = params$horizon*params$interval,
     cost = cost,
     effect = QALY,
-    state_time_limit=params$interval,
-    method="life-table"  # WTF? This crap again? This should be alternate simpsons extended!
+    state_time_limit=ceiling(params$interval*params$d_at+1),
+    method="life-table"  # WTF? This should be called "trapezoidal" and better should be alternate simpsons extended!
   )
   
   ### add gene prevalence
@@ -221,8 +221,8 @@ markov_summary <- function(solution, params)
                                    data.frame(solution$combined_model$run_model[2,])
   
   c(dCOST       = unname(summary[1,'cost']),
-    dQALY       = unname(summary[1,'QALY']/params$interval),
-    possible    = unname(sum(model$values$possible)/params$interval),
+    dQALY       = unname(summary[1,'QALY']),
+    possible    = unname(sum(model$values$possible)),
     fatal_b     = unname(sum(model$values$fatal_b)),
     living      = unname(model$values$living[length(model$values$living)]),
     disutil_a   = unname(sum(model$values$dis_a)),
@@ -250,4 +250,5 @@ markov_icer <- function(params)
   )
 }
 
+round(markov_summary(solution <- markov_simulation(params), params),5)
 #markov_icer(params)
