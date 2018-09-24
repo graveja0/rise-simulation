@@ -94,13 +94,14 @@ deq_simulation <- function(params)
   dede(init, times, genModel, params)
 }
 
-deq_icer <- function(params)
+deq_icer <- function(params, reference=NULL, genotype=NULL)
 {
   params$p_o <- 0.0 # No testing, reference
-  reference  <- deq_summary(deq_simulation(params), params)
+  reference <- deq_summary(if(is.null(reference)) deq_simulation(params) else reference, params)
+           
   
   params$p_o <- 1.0 # Genotype testing upon indication
-  genotype   <- deq_summary(deq_simulation(params), params)
+  genotype   <- deq_summary(if(is.null(genotype)) deq_simulation(params) else genotype, params)
   
   c( ICER       = unname((genotype['dCOST'] - reference['dCOST']) / (genotype['dQALY'] - reference['dQALY'])),
      NMB        = unname((reference['dCOST'] - genotype['dCOST']) + params$wtp*(genotype['dQALY'] - reference['dQALY'])),

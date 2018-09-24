@@ -104,13 +104,13 @@ des_summary <- function(df, params)
   })
 }
 
-des_icer <- function(params)
+des_icer <- function(params, reference=NULL, genotype=NULL)
 {
   params$p_o <- 0.0 # No testing, reference
-  reference  <- des_summary(des_simulation(params), params)
-
+  reference <- des_summary(if(is.null(reference)) des_simulation(params) else reference, params)
+           
   params$p_o <- 1.0 # Genotype testing upon indication
-  genotype   <- des_summary(des_simulation(params), params)
+  genotype   <- des_summary(if(is.null(genotype)) des_simulation(params) else genotype, params)
 
   c( ICER       = unname((genotype['dCOST'] - reference['dCOST']) / (genotype['dQALY'] - reference['dQALY'])),
      NMB        = unname((reference['dCOST'] - genotype['dCOST']) + params$wtp*(genotype['dQALY'] - reference['dQALY'])),

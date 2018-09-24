@@ -1,30 +1,22 @@
 source("simple-deq.R")
 source("simple-des.R")
+source("simple-markov.R")
+source("simple-params.R")
 
 library(randtoolbox)
+library(microbenchmark)
+library(progress)
 
 
 halton_run <- function(n, FUN=deq_icer, start=1)
 {
   if(start > 1) halton(start-1, 15, init=TRUE)
   
-  apply(halton(n, 15, init=(start == 1)), 1, function(x) 
+  pb <- progress_bar$new(format= "(:spin) [:bar] :percent\r", total = n)
+  
+  result <- apply(halton(n, 15, init=(start == 1)), 1, function(x) 
   {
-    cat(".")
-    
-    params       <- list(  # Control
-      n       = 100000,          # DES simulations to perform
-      wtp     = 100000,          # Willingness to pay threshold
-      resolution = 7/365,        # Time step for DEQ approach
-      
-      # Gompertz model of secular death for 40yr female
-      # fit from 2012 social security data
-      shape   = 0.1007511,
-      rate    = 0.0008370717,
-      
-      # Discounting
-      disc  = 0.03               # Annual Discount Rate
-    )
+    pb$tick()
     
     params$p_bd = x[1] # Probability of death from B
     params$p_g  = x[2] # Probability of genetic variant
@@ -46,17 +38,32 @@ halton_run <- function(n, FUN=deq_icer, start=1)
     
     params$horizon <- x[15]*79 + 1 # 1:80 years for simulation
     
-    results <- FUN(params)
+    #cat("running ")
+    #print(params)
+    #cat("\n")
+    et <- microbenchmark(results <- FUN(params), times=1L)
     
-    x <- with(params, c(p_bd, p_g, r_a, r_b, rr_b, c_a, c_bs, c_bd, c_tx, c_alt, c_t, d_a, d_at, d_b, horizon, results))
+    x <- with(params, c(p_bd, p_g, r_a, r_b, rr_b, c_a, c_bs, c_bd, c_tx, c_alt, c_t, d_a, d_at, d_b, horizon, et$time/1e6, results))
     
     names(x) <- c("p_bd", "p_g", "r_a", "r_b", "rr_b", "c_a", "c_bs", "c_bd", "c_tx", "c_alt", "c_t", "d_a", "d_at", "d_b",
-                  "horizon", names(results))
+                  "horizon", "system.time", names(results))
     x
   })
+ pb$terminate()
+  
+  result
 }
 
-x <- t(halton_run(10))
+#x <- t(halton_run(5000, deq_icer))
+#write.csv(x, "deq-icer-psa-0.csv", row.names=FALSE)
+
+#x <- t(halton_run(5000, des_icer))
+#write.csv(x, "des-icer-psa-0.csv", row.names=FALSE)
+
+x <- t(halton_run(5000, markov_icer))
+write.csv(x, "des-markov-psa-0.csv", row.names=FALSE)
+
+
 # write.csv(x, "simple-psa-0.csv", row.names=FALSE)
 # 
 # x <- t(halton_run(900, 101))

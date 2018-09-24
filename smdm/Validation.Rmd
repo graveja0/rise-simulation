@@ -13,7 +13,10 @@ source("simple-des.R")
 source("simple-deq.R")
 source("simple-markov.R")
 
-set.seed(1)
+# Base case is genotyped
+params$p_o <- 1.0
+
+set.seed(2)
 
 ```
 
@@ -123,9 +126,9 @@ rbind(des = des_summary(des, params),
 ```
 
 ```{r icers}
-rbind(des = des_icer(params),
-      deq = deq_icer(params),
-      mar = markov_icer(params))
+rbind(des = des_icer(params, genotype=des),
+      deq = deq_icer(params, genotype=deq),
+      mar = markov_icer(params, solution=mar))
 ```
 
 

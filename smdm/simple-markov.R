@@ -42,9 +42,6 @@ markov_simulation <- function(params)
     pBD = pB*fatalB,
     
     gene = 1, #0 or 1
-    # Question for Zilu, why is this inverted?
-    # Further question, why is it not inside a map_dbl
-    #rr = 1-params$rr_b*gene, 
     rr = map_dbl(gene, function(x) ifelse(x==0, 1, params$rr_b)),
     
     #just for genotype strategy
@@ -76,13 +73,13 @@ markov_simulation <- function(params)
   # Healthy
   state_H <- define_state(
     cost     = 0,
-    QALY     = discount(1,dr),
+    QALY     = discount(1/params$interval,dr),
     
     # Diagnostics
     A_acc    = 0,
     A_du_acc = 0,
     living   = 1,
-    possible = discount(1, dr),
+    possible = discount(1/params$interval, dr),
     fatal_b  = 0,
     cost_g   = 0,
     cost_d   = 0,
@@ -104,7 +101,7 @@ markov_simulation <- function(params)
     A_acc    = ifelse(state_time==1,1,0),
     A_du_acc = ifelse(state_time<=params$d_at*params$interval,1,0), # How many in disutility state
     living   = 1,
-    possible = discount(1, dr),
+    possible = discount(1/params$interval, dr),
     fatal_b  = 0,
     cost_g   = discount(ifelse(state_time==1,costTest,0), dr),
     cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
@@ -126,7 +123,7 @@ markov_simulation <- function(params)
     A_acc    = 0,
     A_du_acc = 0,
     living   = 1,
-    possible = discount(1, dr),
+    possible = discount(1/params$interval, dr),
     fatal_b  = 0,
     cost_g   = 0,
     cost_d   = discount(dispatch_strategy(reference=costDrug,genotype=cDgenotype), dr),
@@ -197,10 +194,10 @@ markov_simulation <- function(params)
     reference=strat_reference,
     genotype=strat_genotype,
     parameters = param,
-    cycles = params$horizon*params$interval,
+    cycles = ceiling(params$horizon*params$interval),
     cost = cost,
     effect = QALY,
-    state_time_limit=ceiling(params$interval*params$d_at+1),
+    state_time_limit=ceiling(min(params$interval*params$d_at+1, params$horizon*params$interval)),
     method="life-table"  # WTF? This should be called "trapezoidal" and better should be alternate simpsons extended!
   )
   
@@ -233,9 +230,9 @@ markov_summary <- function(solution, params)
   )/1000
 }
 
-markov_icer <- function(params)
+markov_icer <- function(params, solution=NULL)
 {
-  solution   <- markov_simulation(params)
+  if(is.null(solution)) solution   <- suppressMessages(markov_simulation(params))
   params$p_o <- 0
   reference  <- markov_summary(solution, params)
   params$p_o <- 1
@@ -250,5 +247,5 @@ markov_icer <- function(params)
   )
 }
 
-round(markov_summary(solution <- markov_simulation(params), params),5)
+#round(markov_summary(solution <- markov_simulation(params), params),5)
 #markov_icer(params)
