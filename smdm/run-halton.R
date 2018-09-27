@@ -20,8 +20,8 @@ halton_run <- function(n, FUN=deq_icer, start=1)
     
     params$p_bd = x[1] # Probability of death from B
     params$p_g  = x[2] # Probability of genetic variant
-    params$r_a  = inst_rate(x[3], 10) # 10% Rate of A over a 10 year period
-    params$r_b  = inst_rate(x[4], 1) # 2% Rate of B
+    params$r_a  = x[3]*0.8 + 0.0025 # Inst Rate of A over a 10 year period
+    params$r_b  = x[4]*0.8 + 0.0025 # Inst Rate of B
     params$rr_b = x[5] # Reduced relative risk of B
     
     # Costs
@@ -38,9 +38,6 @@ halton_run <- function(n, FUN=deq_icer, start=1)
     
     params$horizon <- x[15]*79 + 1 # 1:80 years for simulation
     
-    #cat("running ")
-    #print(params)
-    #cat("\n")
     et <- microbenchmark(results <- FUN(params), times=1L)
     
     x <- with(params, c(p_bd, p_g, r_a, r_b, rr_b, c_a, c_bs, c_bd, c_tx, c_alt, c_t, d_a, d_at, d_b, horizon, et$time/1e6, results))
@@ -54,24 +51,11 @@ halton_run <- function(n, FUN=deq_icer, start=1)
   result
 }
 
-#x <- t(halton_run(5000, deq_icer))
-#write.csv(x, "deq-icer-psa-0.csv", row.names=FALSE)
+# x <- t(halton_run(5000, deq_icer))
+# write.csv(x, "data/deq-icer-cube.csv", row.names=FALSE)
 
-#x <- t(halton_run(5000, des_icer))
-#write.csv(x, "des-icer-psa-0.csv", row.names=FALSE)
+x <- t(halton_run(5000, des_icer))
+write.csv(x, "data/des-icer-cube.csv", row.names=FALSE)
 
-x <- t(halton_run(5000, markov_icer))
-write.csv(x, "des-markov-psa-0.csv", row.names=FALSE)
-
-
-# write.csv(x, "simple-psa-0.csv", row.names=FALSE)
-# 
-# x <- t(halton_run(900, 101))
-# write.csv(x, "simple-psa-1.csv", row.names=FALSE)
-
-# cat simple-psa-?.csv > psa.csv
-
-# x <- read.csv("psa.csv")
-# x$norm <- (x$ICER - median(x$ICER)) / median(x$ICER)
-# m <- lm(norm ~ p_bd+p_g+r_a+r_b+rr_b+c_a+c_bs+c_bd+c_tx+c_alt+c_t+d_a+d_at+d_b+horizon, x)
-
+# x <- t(halton_run(5000, markov_icer))
+# write.csv(x, "data/markov-icer-cube.csv", row.names=FALSE)

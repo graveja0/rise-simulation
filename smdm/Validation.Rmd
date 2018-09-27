@@ -67,7 +67,7 @@ lines(0:params$horizon, c(0, cumsum(mar$combined_model$eval_strategy_list$refere
 plot(deq[,'time'], 100*rowSums(deq[,c('a_dp','a_da')]),
      type='l', lwd=2,
      ylab='Percent Population', xlab="t (year)",
-     main="Indication Disutility Occupancy", ylim=c(0, 1.1*params$d_at))
+     main="Indication Disutility Occupancy", ylim=c(0, 1.1*max(100*rowSums(deq[,c('a_dp','a_da')]))))
 # DES
 x <- data.frame(time=c(des$indication, des$cutoff),
                 count=c(rep(1,  length(des$indication)),
