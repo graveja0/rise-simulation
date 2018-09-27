@@ -2,7 +2,7 @@ library(deSolve)
 
 # Vector must be 8 points or longer for alternate simpson integration
 alt_ext_simpson <- function(x)
-  sum(c(17/48, 50/48, 43/48, 49/48, rep(1, length(x)-8), 49/48, 43/48, 50/48, 17/48)*x)
+  sum(c(17/48, 59/48, 43/48, 49/48, rep(1, length(x)-8), 49/48, 43/48, 59/48, 17/48)*x)
 
 
 ###################################

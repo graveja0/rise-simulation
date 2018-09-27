@@ -56,9 +56,9 @@ psa_run <- function(n, FUN=deq_icer, seed=314152)
 
 x <- t(psa_run(5000, deq_icer))
 write.csv(x, "data/deq-icer-psa.csv", row.names=FALSE)
-
-x <- t(psa_run(5000, des_icer))
-write.csv(x, "data/des-icer-psa.csv", row.names=FALSE)
-
-x <- t(psa_run(5000, markov_icer))
-write.csv(x, "data/markov-icer-psa.csv", row.names=FALSE)
+# 
+# x <- t(psa_run(5000, des_icer))
+# write.csv(x, "data/des-icer-psa.csv", row.names=FALSE)
+# 
+# x <- t(psa_run(5000, markov_icer))
+# write.csv(x, "data/markov-icer-psa.csv", row.names=FALSE)

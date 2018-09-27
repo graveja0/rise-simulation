@@ -51,11 +51,11 @@ halton_run <- function(n, FUN=deq_icer, start=1)
   result
 }
 
-# x <- t(halton_run(5000, deq_icer))
-# write.csv(x, "data/deq-icer-cube.csv", row.names=FALSE)
-
-x <- t(halton_run(5000, des_icer))
-write.csv(x, "data/des-icer-cube.csv", row.names=FALSE)
-
+x <- t(halton_run(5000, deq_icer))
+write.csv(x, "data/deq-icer-cube.csv", row.names=FALSE)
+# 
+# x <- t(halton_run(5000, des_icer))
+# write.csv(x, "data/des-icer-cube.csv", row.names=FALSE)
+# 
 # x <- t(halton_run(5000, markov_icer))
 # write.csv(x, "data/markov-icer-cube.csv", row.names=FALSE)
