@@ -59,3 +59,4 @@ write.csv(x, "data/deq-icer-cube.csv", row.names=FALSE)
 # 
 # x <- t(halton_run(5000, markov_icer))
 # write.csv(x, "data/markov-icer-cube.csv", row.names=FALSE)
+
