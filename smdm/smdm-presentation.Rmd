@@ -1,0 +1,376 @@
+---
+title: "smdm-presentation"
+output: beamer_presentation
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+library(tidyverse)
+library(directlabels)
+library(patchwork)
+library(rlang)
+library(randtoolbox)
+library(microbenchmark)
+library(progress)
+
+```
+
+## Motivation
+
+![Model Diagram](./Simplest-Model.png)
+
+
+
+```{r setup2}
+source("simple-params.R")
+source("simple-des.R")
+source("simple-deq.R")
+source("simple-markov.R")
+
+# Base case is genotyped
+params$p_o <- 1.0
+
+set.seed(2)
+
+des <- des_simulation(params)
+deq <- deq_simulation(params)
+mar <- markov_simulation(params)
+
+plot_occupancy <- function(df,x,y,group,range = c(0,45)) {
+  group <- enquo(group)
+  x <- enquo(x)
+  y <- enquo(y)
+  # Plot: Total Percent of Population 
+  p <- df %>% 
+  ggplot(aes(x = !!x, y = !!y)) + geom_line(aes(colour = !!group)) + 
+   theme_bw() +
+    xlab("Time") + 
+    ylab("Percent of Population") +
+    xlim(range)
+  direct.label(p,"last.bumpup")
+}
+
+# Indication Occupancy
+ind.ordered <- sort(des$indication)
+sub <- seq(1, length(ind.ordered), by=1000)
+occ_indication <- data.frame(time = deq[,'time'], a_c = deq[,'a_c'] * 100, model = "dede") %>% 
+  bind_rows(data.frame(time = ind.ordered[sub]/365, a_c = 100*sub/params$n, model = "des")) %>% 
+  bind_rows(data.frame(time = 0:params$horizon, 
+                       a_c = c(0, cumsum(mar$combined_model$eval_strategy_list$reference$values$A_acc/10))[(0:params$horizon)*params$interval+1],
+            model = "markov")) %>% 
+  tbl_df()
+p_occ_indication <- plot_occupancy(occ_indication, x = time, y = a_c, group = model)
+
+# Difference in Models
+dede_fn <- approxfun(occ_indication %>% filter(model=="dede") %>% pull(time), occ_indication %>% filter(model == "dede") %>% pull(a_c))
+des_fn <- approxfun(occ_indication %>% filter(model=="des") %>% pull(time), occ_indication %>% filter(model == "des") %>% pull(a_c))
+mar_fn <- approxfun(occ_indication %>% filter(model=="markov") %>% pull(time), occ_indication %>% filter(model == "markov") %>% pull(a_c))
+
+times <- seq(0,40,0.1)
+p_df_diff <- data.frame(time = times, dede = dede_fn(times), des = des_fn(times), markov = mar_fn(times))
+p_df_diff$des <- p_df_diff$des - p_df_diff$dede
+p_df_diff$markov <- p_df_diff$markov - p_df_diff$dede
+p_df_diff <- p_df_diff %>% 
+  select(-dede) %>% 
+  gather(key,value,-time)
+
+p <- 
+  p_df_diff %>% 
+  ggplot(aes(x = time, y = value)) + geom_line(aes(colour = key)) + 
+  theme_bw() + 
+  xlab("Time") + 
+  ylab("Difference\n(% of Population)") + 
+  geom_hline(aes(yintercept = 0)) + 
+  xlim(c(0,50))
+p_diff_indication <- direct.label(p,"last.bumpup")
+
+p_occ_indication + p_diff_indication + plot_layout(ncol = 1)
+
+```
+
+## Halton
+
+```{r}
+halton_run <- function(n, FUN=deq_icer, start=1)
+{
+  if(start > 1) halton(start-1, 14, init=TRUE)
+  
+  pb <- progress_bar$new(format= "(:spin) [:bar] :percent\r", total = n)
+  
+  result <- apply(halton(n, 14, init=(start == 1)), 1, function(x) 
+  {
+    pb$tick()
+    
+    params$p_bd = x[1] # Probability of death from B
+    params$p_g  = x[2] # Probability of genetic variant
+    params$r_a  = inst_rate(x[3], 10) # 10% Rate of A over a 10 year period
+    params$r_b  = inst_rate(x[4], 1) # 2% Rate of B
+    params$rr_b = x[5] # Reduced relative risk of B
+    
+    # Costs
+    params$c_a   <- exp(4.60517 * x[6] + 6.907755) # Cost of Event A 1000 -> 10000 log scale
+    params$c_bs  <- exp(4.60517 * x[7] + 6.907755) # Cost of Event B survival
+    params$c_bd  <- exp(4.60517 * x[8] + 6.907755) # Cost of Event B death
+    params$c_tx  <- 9.99*x[9]+0.01   # Cost of daily normal treatment
+    params$c_alt <- 99.99*x[10]+0.01     # Cost of alternate treatment
+    params$c_t   <- 1000*x[11]   # Cost of test
+               
+    params$d_a   <- 0.5*x[12]     # Disutility of A
+    params$d_at  <- 10*x[13]      # Duration of A in years.
+    params$d_b   <- 0.5*x[14]     # Disutility of B 
+    
+    #params$horizon <- x[15]*79 + 1 # 1:80 years for simulation
+    
+    #cat("running ")
+    #print(params)
+    #cat("\n")
+    et <- microbenchmark(results <- FUN(params), times=1L)
+    
+    x <- with(params, c(p_bd, p_g, r_a, r_b, rr_b, c_a, c_bs, c_bd, c_tx, c_alt, c_t, d_a, d_at, d_b, horizon, et$time/1e6, results))
+    
+    names(x) <- c("p_bd", "p_g", "r_a", "r_b", "rr_b", "c_a", "c_bs", "c_bd", "c_tx", "c_alt", "c_t", "d_a", "d_at", "d_b",
+                  "horizon", "system.time", names(results))
+    x
+  })
+ pb$terminate()
+  
+  result
+}
+
+halton_deq <- t(halton_run(100, deq_icer))
+#write.csv(halton_deq,file="./halton_deq.csv")
+halton_markov <- t(halton_run(100, markov_icer))
+#write.csv(halton_markov,file = "./halton_markov.csv")
+#halton_des <- t(halton_run(3,des_icer))
+
+```
+
+
+## slide d
+
+```{r}
+require(purrr)
+require(knitr)
+
+df_deq <- halton_deq %>% 
+  tbl_df() %>% 
+  mutate(iteration = row_number()) %>% 
+  mutate(qaly_reference = dQALY.ref,
+         qaly_test = dQALY.test,
+         cost_reference = dCOST.ref,
+         cost_test = dCOST.test) %>% 
+  select(iteration,contains("qaly_"),contains("cost_")) %>% 
+  mutate(model = "Differential Equations")
+
+
+df_mar <- halton_markov %>% 
+  tbl_df() %>% 
+  mutate(iteration = row_number()) %>% 
+  mutate(qaly_reference = dQALY.ref,
+         qaly_test = dQALY.test,
+         cost_reference = dCOST.ref,
+         cost_test = dCOST.test) %>% 
+  select(iteration,contains("qaly_"),contains("cost_")) %>% 
+  mutate(model = "Markov Cohort")
+
+df_psa_long <- 
+  df_deq %>% 
+  #bind_rows(df_des) %>% 
+  bind_rows(df_mar) %>% 
+  gather(key,value,-iteration,-model) %>% 
+  separate(key,into = c("outcome","strategy")) %>% 
+  spread(outcome,value) 
+
+
+p_ce_plane <- 
+  df_psa_long %>% ggplot(aes(x = qaly, y = cost)) + 
+  geom_point(aes(colour=strategy)) + 
+  theme_minimal() + 
+  #scale_colour_grey() + 
+  xlab("QALYs") + 
+  ylab("Costs") + 
+  facet_wrap(~model) +
+  NULL
+
+direct.label(p_ce_plane,"smart.grid")
+
+
+```
+
+## slide 3
+
+```{r}
+# In each of the 1000 iterations, the total cost (C) and total effect (E) was estimated for each option, and for a particular cost-effectiveness threshold (l), the net monetary benefit (NMB) was estimated: NMB = l ¥ E - C. In each of the 1000 iterations, the option with the highest net benefit was then identified. The probability of being cost-effective was then equivalent to the propor- tion of the 1000 iterations for which each option had the highest net benefit. CEACs were estimated by plot- ting these proportions (y-axis) for different l-values (x-axis). 
+
+lambda_range <- unique(c(seq(0,1000,100),seq(1000,5000,500),seq(5000,30000,1000),seq(30000,300000,5000)))
+
+df_ceac_deq <- 
+  lambda_range %>% 
+  map(~(
+  df_psa_long %>% filter(model == "Differential Equations") %>% 
+  mutate(nmb = as.numeric(paste0(.x)) * qaly - cost))) %>% 
+  set_names(lambda_range) %>% 
+  bind_rows(.id = "lambda") %>% 
+  mutate(lambda = as.numeric(paste0(lambda))) %>% 
+  group_by(iteration,lambda) %>% 
+  mutate(max = max(nmb)) %>% 
+  mutate(max = as.integer(nmb==max)) %>% 
+  mutate(model = "Differential Equations")
+
+
+# df_ceac_des <- 
+#   lambda_range %>% 
+#   map(~(
+#   df_psa_long %>% filter(model == "Discrete Event Simulation") %>% 
+#   mutate(nmb = as.numeric(paste0(.x)) * qaly - cost))) %>% 
+#   set_names(lambda_range) %>% 
+#   bind_rows(.id = "lambda") %>% 
+#   mutate(lambda = as.numeric(paste0(lambda))) %>% 
+#   group_by(iteration,lambda) %>% 
+#   mutate(max = max(nmb)) %>% 
+#   mutate(max = as.integer(nmb==max)) %>% 
+#   mutate(model = "Discrete Event Simulation")
+
+
+df_ceac_mar  <- 
+  lambda_range %>% 
+  map(~(
+  df_psa_long %>% filter(model == "Markov Cohort") %>% 
+  mutate(nmb = as.numeric(paste0(.x)) * qaly - cost))) %>% 
+  set_names(lambda_range) %>% 
+  bind_rows(.id = "lambda") %>% 
+  mutate(lambda = as.numeric(paste0(lambda))) %>% 
+  group_by(iteration,lambda) %>% 
+  mutate(max = max(nmb)) %>% 
+  mutate(max = as.integer(nmb==max)) %>% 
+  mutate(model = "Markov Cohort")
+
+# CEAF
+# it is necessary to identify the mean cost and mean effect for each option (across each of the 1000 simulations), and to calculate which option is optimal (has the highest expected net benefit) at different levels of l. Thus, the range of l-values over which an option is optimal can be cal- culated, and the “switch points” (when there is a change in the optimal option) correspond to the ICER between different options [17]. The lower value of the range of values for the cost-effectiveness threshold for which each option was optimal denotes the ICER for that particular option, and the upper value denotes the ICER for the next most costly option.
+
+df_ceaf_cutpoints_deq <- 
+  lambda_range %>% 
+    map(~(df_ceac_deq %>% 
+    group_by(strategy,lambda) %>% 
+    mutate_at(vars(cost,qaly),funs(mean = mean)) %>% 
+    mutate(nmb = .x * qaly_mean - cost_mean) %>% 
+    ungroup() %>% 
+    select(-lambda))) %>% 
+    set_names(lambda_range)  %>% 
+    bind_rows(.id="lambda") %>% 
+    mutate(lambda = as.numeric(paste0(lambda))) %>%
+    group_by(lambda) %>% 
+    mutate(max = as.integer(nmb == max(nmb))) %>% 
+    filter(max ==1) %>% 
+    select(lambda,strategy) %>% 
+    unique()  %>% 
+    mutate(optimal = 1)
+
+
+# df_ceaf_cutpoints_des <- 
+#   lambda_range %>% 
+#     map(~(df_ceac_des %>% 
+#     group_by(strategy,lambda) %>% 
+#     mutate_at(vars(cost,qaly),funs(mean = mean)) %>% 
+#     mutate(nmb = .x * qaly_mean - cost_mean) %>% 
+#     ungroup() %>% 
+#     select(-lambda))) %>% 
+#     set_names(lambda_range)  %>% 
+#     bind_rows(.id="lambda") %>% 
+#     mutate(lambda = as.numeric(paste0(lambda))) %>%
+#     group_by(lambda) %>% 
+#     mutate(max = as.integer(nmb == max(nmb))) %>% 
+#     filter(max ==1) %>% 
+#     select(lambda,strategy) %>% 
+#     unique()  %>% 
+#     mutate(optimal = 1)
+
+
+df_ceaf_cutpoints_mar <- 
+  lambda_range %>% 
+    map(~(df_ceac_mar %>% 
+    group_by(strategy,lambda) %>% 
+    mutate_at(vars(cost,qaly),funs(mean = mean)) %>% 
+    mutate(nmb = .x * qaly_mean - cost_mean) %>% 
+    ungroup() %>% 
+    select(-lambda))) %>% 
+    set_names(lambda_range)  %>% 
+    bind_rows(.id="lambda") %>% 
+    mutate(lambda = as.numeric(paste0(lambda))) %>%
+    group_by(lambda) %>% 
+    mutate(max = as.integer(nmb == max(nmb))) %>% 
+    filter(max ==1) %>% 
+    select(lambda,strategy) %>% 
+    unique()  %>% 
+    mutate(optimal = 1)
+
+
+df_ceaf_deq <- 
+  df_ceac_deq %>% 
+  group_by(lambda,strategy) %>% 
+  summarise_at(vars(max),funs(mean)) %>% 
+  inner_join(df_ceaf_cutpoints_deq,c("lambda","strategy"))  %>% 
+  mutate(model = "Differential Equations")
+
+# df_ceaf_des <- 
+#   df_ceac_des %>% 
+#   group_by(lambda,strategy) %>% 
+#   summarise_at(vars(max),funs(mean)) %>% 
+#   inner_join(df_ceaf_cutpoints_des,c("lambda","strategy")) %>% 
+#   mutate(model = "Discrete Event Simulation")
+
+df_ceaf_mar <- 
+  df_ceac_mar %>% 
+  group_by(lambda,strategy) %>% 
+  summarise_at(vars(max),funs(mean)) %>% 
+  inner_join(df_ceaf_cutpoints_mar,c("lambda","strategy")) %>% 
+  mutate(model = "Markov Cohort")
+
+df_ceac <- 
+  df_ceac_deq %>% 
+  #bind_rows(df_ceac_des) %>% 
+  bind_rows(df_ceac_mar)
+
+df_ceaf <- 
+  df_ceaf_deq %>% 
+  #bind_rows(df_ceaf_des) %>% 
+  bind_rows(df_ceaf_mar)
+
+decision_error_range <- df_ceaf_cutpoints_deq %>% 
+  anti_join(df_ceaf_cutpoints_mar) %>% 
+  pull(lambda) %>% range()
+
+p_ceac <- 
+  df_ceac %>% 
+  group_by(lambda,strategy,model) %>% 
+  summarise_at(vars(max),funs(mean)) %>% 
+  ggplot(aes(x = lambda, y= max)) + geom_line(aes(colour = strategy, lty = model)) + 
+  theme_minimal() + 
+  geom_line(data = df_ceaf, lwd=1.5, aes(colour=strategy,lty=model)) + 
+  xlab("Willingness to Pay Threshold") + 
+  ylab("Pr(Cost Effective)") + 
+  geom_rect(aes(xmin = decision_error_range[1], xmax = decision_error_range[2], ymin = 0, ymax = Inf), fill =  "lightgrey",alpha = 0.01)
+
+direct.label(p_ceac,"angled.boxes")  
+  
+
+```
+
+```{r}
+# Identify the range of decision error
+
+decision_error_range <- df_ceaf_cutpoints_deq %>% 
+  anti_join(df_ceaf_cutpoints_mar) %>% 
+  pull(lambda) %>% range()
+
+foo <- p_ceac + 
+  geom_rect(aes(xmin = decision_error_range[1], xmax = decision_error_range[2], ymin = 0, ymax = Inf), fill =  "lightgrey",alpha = 0.01)
+direct.label(foo,"angled.boxes")  
+
+
+
+```
+
+
