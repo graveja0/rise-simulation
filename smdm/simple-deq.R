@@ -2,7 +2,7 @@ library(deSolve)
 
 # Vector must be 8 points or longer for alternate simpson integration
 alt_ext_simpson <- function(x)
-  sum(c(17/48, 50/48, 43/48, 49/48, rep(1, length(x)-8), 49/48, 43/48, 50/48, 17/48)*x)
+  sum(c(17/48, 59/48, 43/48, 49/48, rep(1, length(x)-8), 49/48, 43/48, 59/48, 17/48)*x)
 
 
 ###################################
@@ -64,10 +64,10 @@ deq_summary <- function(solution, params)
     
     # Temp Disutility of Indication
     disA <- d_a*alt_ext_simpson(solution[,'a_dp']*solution[,"dsc"])*step +
-            d_a*alt_ext_simpson(solution[,'a_da']*solution[,"dsc"])*step
+      d_a*alt_ext_simpson(solution[,'a_da']*solution[,"dsc"])*step
     # Permanent Disutility for Adverse Event
     disB <- d_b*alt_ext_simpson(solution[,'b_p']*solution[,"dsc"])*step + 
-            d_b*alt_ext_simpson(solution[,'b_a']*solution[,"dsc"])*step 
+      d_b*alt_ext_simpson(solution[,'b_a']*solution[,"dsc"])*step 
     
     c(dCOST       = unname(treatment.cost+test.cost+drug.cost),
       dQALY       = unname(pQALY-disA-disB),
@@ -98,7 +98,7 @@ deq_icer <- function(params, reference=NULL, genotype=NULL)
 {
   params$p_o <- 0.0 # No testing, reference
   reference <- deq_summary(if(is.null(reference)) deq_simulation(params) else reference, params)
-           
+  
   
   params$p_o <- 1.0 # Genotype testing upon indication
   genotype   <- deq_summary(if(is.null(genotype)) deq_simulation(params) else genotype, params)
