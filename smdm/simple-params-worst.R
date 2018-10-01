@@ -20,7 +20,7 @@ params <- list(
   # Probabilities and rates
   p_o  = 1.0,                # Probability of ordering test (overwritten by runs to 0 and 1)
   p_bd = 0.1,                # Probability of death from B
-  p_g  = 0.2,                # Probability of genetic variant (majority)
+  p_g  = 0.75,               # Probability of genetic variant (majority)
   r_a  = 0.6,                # Inst Rate of A
   r_b  = 0.7,                # Inst Rate of B 
   rr_b = 0.1,                # Reduced relative risk of B
@@ -35,8 +35,8 @@ params <- list(
   c_t   = 335,               # Cost of test
   
   # Disutilities
-  d_a   = 0.16,              # Disutility of A
-  d_at  = 3,                 # Duration of A in years.
+  d_a   = 0.16,               # Disutility of A
+  d_at  = 7.5,               # Duration of A in years.
   d_b   = 0.12,              # Disutility of B
   
   # Discounting
