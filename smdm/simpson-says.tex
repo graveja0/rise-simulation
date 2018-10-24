@@ -1,0 +1,409 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage[numbers]{natbib}
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Half Cycle and Life Tables: What does Simpson say?},
+            pdfauthor={Shawn Garbett MS},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\newcommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+
+  \title{Half Cycle and Life Tables: What does Simpson say?}
+    \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+    \author{Shawn Garbett MS\footnote{Employed by Vanderbilt University Medical Center,
+  Biostatistics Department} \footnote{Financial support for this study was provided entirely by a grant from the 
+  National Institute of Health (1R01HG009694-01). The funding agreement ensured the author's independence in designing the study, interpreting the data, writing and publishing the report }}
+    \preauthor{\centering\large\emph}
+  \postauthor{\par}
+      \predate{\centering\large\emph}
+  \postdate{\par}
+    \date{September 6, 2018}
+
+\usepackage[LGR,T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{textgreek}
+\usepackage{float}
+\usepackage[x11names,dvipsnames,table]{xcolor}
+\usepackage{boldline}
+\usepackage{colortbl}
+\usepackage{hhline}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+The half-cycle correction method and the recommended life table
+membership methods are commonly used to numerical compute state
+membership in discrete Markov models in the health economics field. The
+essence of the problem is numerical integration over a fixed interval
+size. This problem has a rich history dating back to Newton and Cotes
+correspondences, and a better method was published in 1743 by Simpson
+with accompanying proof about expected error of the method. The
+alternative Simpson method is considered state of the art and easy to
+use. We conclude that both the half-cycle correction and life table
+method should be dropped in favor of the alternative Simpson method.
+\end{abstract}
+
+\section{Introduction}
+
+Barendregt\cite{barendregt2009} recommended banishing the half-cycle correction in
+summing state occupancy in a discrete Markov model, especially in the
+field of health economics for cost and utility
+calculations\cite{barendregt2009,naimark2008,sonnenberg1993}. The
+recommended solution was to use life tables. The life table method is a
+restated version of the \emph{trapezoidal rule} which is a closed
+Newton-Cotes formula.
+
+These methods are foundational in the field of numerical integration
+(also called quadrature) which numerically computes the area under a
+curve computed at fixed intervals. In the context of discrete Markov
+models numerical integration is an estimator of state occupancy or some
+derived function from that occupancy such as total quality-adjusted life
+years (QALY) or total cost typically modified by a discounting function.
+These methods all assume that the resulting function being integrated is
+smooth and does not have discontinuities, which fortunately is common
+for health economic models. These methods were widely used in the 18th
+and 19th centuries for manual computation and a very common tool of
+human `computers'\cite{epperson2007}. In this context it is worth
+understanding the state of the art, its known error, and limitations.
+The discovery of the trapezoidal rule has occurred independently in
+other fields as well\cite{tai1994}.
+
+A closed formula uses the end points of the data set and an open formula
+only uses the interior points. The proposed life table method is none
+other than the \emph{trapezoidal rule} as proposed by Sir Issac Newton:
+
+\[ \int^{x_2}_{x_1} f(x) dx = \frac{h}{2}[ f(x_1) + f(x_2)] + O(h^3 f'') \]
+
+This formula represents that integration can be approximated for a
+function \(f\) over an interval, \(h=x_2 - x_1\), by evaluating the ends
+points. The resulting error is proportional to the cube of the interval
+size times the second derivative of the function inside the region. So
+extending this over several intervals of an evaluated discrete Markov
+model, the middle intervals weights add to 1 and the end points stay at
+\(\frac{1}{2}\) weight. This is the life table method.
+
+Such a theory is furthered by Simpson in 1743 to Simpson's rule, which
+didn't have the clean cancellation like the trapezoidal rule, and
+thus Simpson created his \(\frac{3}{8}\) rule with a clean set of
+inner weights (all 1's) and numerical errors on the order of \(O(h^5 f^{(4)})\)\cite{simpson1743}.
+Later Boole (Sometimes misattributed to Bode from an earlier
+  misprint in Abramowitz\cite{abramowitz1965}) extended this further by
+reducing the error another 2 orders\cite{boole1860}. At this point the
+practice of naming these formulas after their discoverer stopped, but
+tables of coefficients for higher order versions exist\cite{abramowitz1965}.
+To get the coefficients to come out cleanly (all 1's in the middle), various alternations
+of strategies have been explored, and one commonly used accepted for
+general use in numerical integration for fixed intervals is known as the
+\emph{alternative extended Simpson's rule}\cite{epperson2007, hamming1973, press1992}.
+
+\[
+\begin{split}
+\int^{x_n}_{x_1} f(x) dx = & \frac{h}{48} [ 17 f(x_1) + 59 f(x_2) + 43 f(x_3) + 49 f(x_4) + f(x_5) + \\ 
+  & \dots + f(x_{n-4}) + 49 f(x_{n-3}) + 43 f(x_{n-2}) + 59 f(x_{n-1}) + 17 f(x_n) ) ] + \\
+  O\left(h^5 f^{(4)} \right)
+\end{split}
+\]
+
+Using the resulting coefficients from this rule reduces overall
+numerical error greatly over the trapezoidal rule. For an interval size
+of one. the error is dependent on the 4th derivative of the function
+instead of the 2nd. With well behaved functions, like those commonly
+found in health economic models, the 4th derivative is much smaller than
+the 2nd. Discounting is easily included by multiplying each time point
+value by the appropriate discounting function.
+
+It is worth noting the effect on error the interval size has. If
+reducing the time step of a Markov model from yearly to monthly the numerical error reduces
+more than 3 decimal places as
+\((1/12)^3 \approx 0.0006\) for the trapezoidal method and 5 decimal
+places for the alternate extended Simpson's method as
+\((1/12)^5 \approx 0.000004\). Rescaling the transition probability
+matrix of a Markov model is a strong method to reduce error and improve
+accuracy under either method.
+
+Many previous discussions have centered on explaining how the half-cycle
+correction works. Simpson's approach doesn't have as simple an
+explanation without understanding the underlying calculus, but it does
+come with a mathematical proof of its properties. A basic conceptual
+viewpoint of what is happening is that differences of the points can be
+used to estimate the first derivative, and the differences of those
+derivative estimates can be used to estimate the 2nd derivative, etc.
+Each of these estimates provide more information about the shape and
+curvature of the function being integrated and contribute differing
+amounts to the final estimate. Hence, the weighting is determined by the
+addition of all these contributions, and many terms combine or cancel
+till a simple weighted sum is all that is required to provide an
+estimate that achieves acceptable accuracy given the data.
+
+One limitation of this method is that the error is amplified a bit when
+encountering discontinuities in the integrated function. For example a
+tunnel state occupancy has a sharp non smooth boundary when it
+transitions from initial loading to a balance of inflow and outflow.
+This can occur in Markov models where a tunnel state is initially
+unoccupied. Further, these methods also assume that the function is not
+``spiky'' such as is seen in spectrography data,
+as this can further reduce numerical accuracy\cite{kalambet2018}.
+Fortunately, most health economic models do not fall into this category
+and the resulting functions are relatively smooth with the exception of
+the single point at the loading of a tunnel state.
+
+
+\subsection{Methods}
+
+In R the alternate extended Simpson's method can be implemented as follows:
+
+\begin{verbatim}
+alt_simp_coef <- function(i) c(17, 59, 43, 49, rep(48, i-8), 49, 43, 59, 17) / 48
+alt_simp      <- function(x,h) h*sum(alt_simp_coef(length(x)) * x)
+\end{verbatim}
+
+In Excel the following VB Macro works given a range of values:
+
+\begin{verbatim}
+Function Simpson(values As Array)
+  
+  Dim sum    As Double
+  Dim begin  As Long
+  Dim final  As Long
+  
+  begin = LBound(values)
+  final = UBound(values)
+  
+  If final - begin < 8 Then
+    Err.Raise 9,"Simpson()","Need 9 or more points to integrate"
+  End If
+
+  sum = 0.0
+  sum = 17*values(begin  ,1)/48 + _
+        59*values(begin+1,1)/48 + _
+        43*values(begin+2,1)/48 + _
+        49*values(begin+3,1)/48 + _
+        49*values(final-3,1)/48 + _
+        43*values(final-2,1)/48 + _
+        59*values(final-1,1)/48 + _
+        17*values(final  ,1)/48
+   
+  For i = begin+4 to final-4
+    sum = sum + values(i,1)
+  Next
+
+  Simpson = sum
+
+End Function
+\end{verbatim}
+
+\section{Results}
+
+This is an extension of the Life Table example from Barendregt
+with results compared to the alternative extended Simpson's rule\cite{barendregt2009}.
+In this example, we will look at a population of 1000
+individuals who are aging from 0 to 10, and we are interested in the
+average total QALYs. The population under consideration has a constant
+death rate of 0.52. The analytical truth of this model is easily
+computed as follows.
+
+\[
+\int^{10}_0 1000 (1-0.52)^x dx = \frac{1000}{\log(0.48)}  0.48^x \Biggr|^{10}_0 \approx  1361.6
+\]
+
+This simple example in Table 1 shows the resulting numerical error is reduced by more
+than an order of magnitude by switching from trapzoidal to Simpson's
+method.
+
+\section{Discussion}
+
+In conclusion, the field of numerical intergration has long investigated
+the problem of integrating a function over a fixed interval as provided
+by the discrete Markov modeling method that is used frequently in health
+economic models. The idea presented of using life tables
+(or half-cycle correction) should be called by it's
+mathematical name, the trapezoidal rule, and is acceptable to improve
+the accuracy of estimates. However, if one is in pursuit of higher
+accuracy, the trapezoidal rule should be passed over in favor of the
+alternative extended Simpson's rule due to its superior numerical
+accuracy. It's a simple weighted sum that is easily done with a
+mathematical proof of behavior. In short, Simpson would recommend it.
+
+\section{Tables and figures}
+
+
+
+\definecolor{nejm-yellow}{RGB}{255,251,237}
+\definecolor{nejm-header}{RGB}{247,244,239}
+
+\begin{table}[H]
+\centering
+{\fontfamily{cmss}\selectfont
+\rowcolors{2}{nejm-yellow}{white}
+{\renewcommand{\arraystretch}{1.2}\begin{tabular}{|lcccccc|}
+\hline
+\rowcolor{nejm-header}\multicolumn{7}{|l|}{Barendregt Life Table Compared with Simpsons Method} \\
+\hline
+\textbf{Summary} & \textbf{Age} & \textbf{Living} & \textbf{Trapezoid} & \textbf{Lx} & \textbf{Simpson} & \textbf{Lsim}\\
+\textbf{} & 0 & 1000 & 0.5 & 500.0 & 0.35 & 354.2\\
+\textbf{} & 1 & 480 & 1 & 480.0 & 1.23 & 590.0\\
+\textbf{} & 2 & 230.4 & 1 & 230.4 & 0.90 & 206.4\\
+\textbf{} & 3 & 110.6 & 1 & 110.6 & 1.02 & 112.9\\
+\textbf{} & 4 & 53.1 & 1 & 53.1 & 1.00 & 53.1\\
+\textbf{} & 5 & 25.5 & 1 & 25.5 & 1.00 & 25.5\\
+\textbf{} & 6 & 12.2 & 1 & 12.2 & 1.00 & 12.2\\
+\textbf{} & 7 & 5.9 & 1 & 5.9 & 1.02 & 6.0\\
+\textbf{} & 8 & 2.8 & 1 & 2.8 & 0.90 & 2.5\\
+\textbf{} & 9 & 1.4 & 1 & 1.4 & 1.23 & 1.7\\
+\textbf{} & 10 & 0.6 & 0.5 & 0.3 & 0.35 & 0.2\\
+\textbf{Sum} & 55 & 1922.5 & 10 & 1422.2 & 10.00 & 1364.7\\
+\textbf{Absolute Error} &  &  &  & 60.6 &  & 3.1\\
+\textbf{Percent Error} &  &  &  & 4.5 &  & 0.2\\
+\hline
+\end{tabular}}
+}
+\caption{Life Table Compared with Simpson's Method}
+
+The Age column is the age of the participants in the population of 1000
+over the model run. Living represents the number of living individuals
+in the model at that age. The Trapezoid column is the weights from the
+trapezoid rule (or life table method). Lx represents the resulting
+contribution to the summation. The Simpson column is the weighting of
+the points in the alternative extended Simpson's rule followed by the
+Lsim which is the total contribution of living to the total life in the
+model. There are rows showing the summation of the column, and the
+resulting error from the known analytical truth of the model.
+
+\end{table}
+
+\section{Acknowledgments}
+
+The author would like to thank John Graves and Lisa McCawley for editorial support in preparing this manuscript.
+
+\section{Declaration of Conflicting Interests}
+
+The author declares that there is no conflict of interest.
+
+\section{References}
+
+\begin{thebibliography}{99}
+
+\bibitem{abramowitz1965}
+Abramowitz, Milton, and Irene A. Stegun. Handbook of
+Mathematical Functions: With Formulas, Graphs, and
+Mathematical Tables. 1st edition. Dover Publications; 1965.
+
+\bibitem{barendregt2009}
+Barendregt, Jan J. ``The Half-Cycle Correction: Banish Rather Than
+Explain It.'' Medical Decision Making. 2009 Jul 1;29(4):500--502.
+doi:10.1177/0272989x09340585.
+
+\bibitem{boole1860}
+Boole, George. A Treatise on the Calculus of Finite
+Differences. Macmillan Co. London; 860. 
+
+\bibitem{epperson2007}
+Epperson, James F. 2007. An Introduction to Numerical Methods and
+Analysis. 1st edition. Wiley-Interscience; 2007.
+
+\bibitem{hamming1973}
+Hamming, Richard W. Numerical Methods for Scientists and
+Engineers. Dover Publications; 1973.
+
+\bibitem{kalambet2018}
+Kalambet, Yuri, Yuri Kozmin, and Andrey Samokhin. ``Comparison of
+Integration Rules in the Case of Very Narrow Chromatographic Peaks.''
+Chemometrics and Intelligent Laboratory Systems. 2018 Aug; 179:22--30.
+doi:10.1016/j.chemolab.2018.06.001.
+
+\bibitem{naimark2008}
+Naimark, David M. J., Michelle Bott, and Murray Krahn.``The
+Half-Cycle Correction Explained: Two Alternative Pedagogical
+Approaches.'' Medical Decision Making. 2008 Sep;28(5):706--12.
+doi:10.1177/0272989x08315241.
+
+\bibitem{press1992}
+Press, William H., Brian P. Flannery, Saul A. Teukolsky, and William T.
+Vetterling. Numerical Recipes in c: The Art of Scientific
+Computing, Second Edition. Cambridge University Press; 1992.
+
+\bibitem{simpson1743}
+Simpson, Thomas. Mathematical Dissertations on a Variety of
+Physical and Analytical Subjects. T. Woodward; 1743.
+
+\bibitem{sonnenberg1993}
+Sonnenberg, Frank A., and J. Robert Beck. 1993. ``Markov Models in
+Medical Decision Making: a practical guide.'' Medical Decision Making. 1993 Oct; 13(4):322--38.
+doi:10.1177/0272989x9301300409.
+
+\bibitem{tai1994}
+Tai, M. M. ``A Mathematical Model for the Determination of Total
+Area Under Glucose Tolerance and Other Metabolic Curves.''
+Diabetes Care. 1994 Feb;17(2):152--54. Diabetes Care.
+doi:10.2337/diacare.17.2.152.
+
+\end{thebibliography}
+
+\end{document}
