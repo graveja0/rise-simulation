@@ -5,6 +5,11 @@ date: "September 6, 2018"
 output:
   pdf_document: default
   html_document: default
+  word_document:
+   fig_caption: yes
+   fig_height: 3.5
+   fig_width: 6.5
+   reference_docx: nejm-style.docx
 email: shawn.garbett@vumc.org
 header-includes:
 - \usepackage[LGR,T1]{fontenc}
@@ -35,16 +40,19 @@ library(tangram)
 
 
 
-Barendregt recommended[@Barendregt2009] banishing the half-cycle correction[@Sonnenberg1993, @Naimark2008] in summing state occupancy in a discrete Markov model, especially in the field of health economics for cost and utility calculations. The recommended solution was to use life tables. The life table method is a restated version of the *trapezoidal rule* which is a closed Newton-Cotes formula.
-These methods are foundational in the field of numerical integration (also called quadrature) which numerically computes the area under a curve computed at fixed intervals. In the context of discrete Markov models numerical integration is an estimator of state occupancy or some derived function from that occupancy such as total quality of life (QALY) or total cost typically modified by a discounting function. These methods all assume that the resulting function being integrated is smooth and does not have discontinuities, which fortunately is common for health economic models. These methods were widely used in the 18th and 19th centuries for manual computation and a very common tool of human 'computers'.[@Epperson2007] In this context it is worth understanding the state of the art, it's known error, and limitations. The discovery of the trapezoidal rule has occurred independently in other fields as well.[@Tai1994]
+Barendregt (2009) recommends banishing the half-cycle correction in summing state occupancy in a discrete Markov model, especially in the field of health economics for cost and utility calculations [@Barendregt2009; @Sonnenberg1993; @Naimark2008]. The recommended solution was to use life tables. The life table method is a restated version of the *trapezoidal rule* which is a closed Newton-Cotes formula.
+
+These methods are foundational in the field of numerical integration (also called quadrature) which numerically computes the area under a curve computed at fixed intervals. In the context of discrete Markov models numerical integration is an estimator of state occupancy or some derived function from that occupancy such as total quality-adjusted life years (QALY) or total cost typically modified by a discounting function. These methods all assume that the resulting function being integrated is smooth and does not have discontinuities, which fortunately is common for health economic models. These methods were widely used in the 18th and 19th centuries for manual computation and a very common tool of human 'computers' [@Epperson2007]. In this context it is worth understanding the state of the art, its known error, and limitations. The discovery of the trapezoidal rule has occurred independently in other fields as well [@Tai1994].
 
 A closed formula uses the end points of the data set and an open formula only uses the interior points. The proposed life table method is none other than the *trapezoidal rule* as proposed by Sir Issac Newton:
 
 $$ \int^{x_2}_{x_1} f(x) dx = \frac{h}{2}[ f(x_1) + f(x_2)] + O(h^3 f'') $$
 
-This formula represents that integration can be approximated for a function $f$ over an interval, $h=x_2 - x_1$, by evaluating the ends points and the resulting error is proportional to the cube of the interval size times the second derivative of the function inside the region. So extending this over several intervals of an evaluated discrete Markov model, the middle intervals weights add to 1 and the end points stay at $\frac{1}{2}$ weight. This is the life table method method.
+This formula represents that integration can be approximated for a function $f$ over an interval, $h=x_2 - x_1$, by evaluating the ends points. The resulting error is proportional to the cube of the interval size times the second derivative of the function inside the region. So extending this over several intervals of an evaluated discrete Markov model, the middle intervals weights add to 1 and the end points stay at $\frac{1}{2}$ weight. This is the life table method method.
 
-Such a theory is furthered by Simpson in 1743[@Simpson1743] to Simpson's rule, which didn't have the clean cancellation like the *trapezoidal rule*, and thus Simpson created his $\frac{3}{8}$ rule with a clean set of weights and errors on the order of $O(h^5 f^{(4)})$. Later Boole ^[Sometimes misattributed to Bode from an earlier misprint in [@Abramowitz1965]] extended this further by reducing the error another 2 orders[@Boole1860]. At this point the practice of naming these formulas after their discoverer stopped, but tables of coefficients for higher order versions exist [@Abramowitz1965]. To get the coefficients to come out various alternations of strategies have been explored, and one commonly used accepted for general use in numerical integration for fixed intervals is known as the *alternative extended Simpson's rule*.[@Epperson2007, @Press1992, @Hamming1973]
+
+
+Such a theory is furthered by Simpson in 1743  to Simpson's rule, which didn't have the clean cancellation like the *trapezoidal rule*, and thus Simpson created his $\frac{3}{8}$ rule with a clean set of weights and errors on the order of $O(h^5 f^{(4)})$ [@Simpson1743]. Later Boole ^[Sometimes misattributed to Bode from an earlier misprint in @Abramowitz1965] extended this further by reducing the error another 2 orders [@Boole1860]. At this point the practice of naming these formulas after their discoverer stopped, but tables of coefficients for higher order versions exist [@Abramowitz1965]. To get the coefficients to come out, various alternations of strategies have been explored, and one commonly used accepted for general use in numerical integration for fixed intervals is known as the *alternative extended Simpson's rule* [@Epperson2007, @Press1992, @Hamming1973].
 
 $$
 \begin{split}
@@ -54,18 +62,20 @@ $$
 \end{split}
 $$
 
-Using the resulting coefficients from this rule reduces overall numerical error greatly compared with the trapezoidal rule in most cases. For an interval size of one it's now dependent on the 4th derivative of the function instead of the 2nd. With well behaved functions, like those commonly found in health economic models the 4th derivative is much smaller than the 2nd. Discounting is easily included by multiplying each time point value by the appropriate discounting function.
+Using the resulting coefficients from this rule reduces overall numerical error greatly over the trapezoidal rule. For an interval size of one. the error is dependent on the 4th derivative of the function instead of the 2nd. With well behaved functions, like those commonly found in health economic models, the 4th derivative is much smaller than the 2nd. Discounting is easily included by multiplying each time point value by the appropriate discounting function.
 
-Many of the previous discussion has centered on explaining how the half-cycle correction works. This approach doesn't have as simple an explanation without understanding the underlying calculus, but it does come with a mathematical proof of it's properties. A loose conceptual viewpoint of what is happening is that differences of the points can be used to estimate the first derivative, and the differences of those derivative estimates can be used to estimate the 2nd derivative, etc. Each of these estimates provide more information about the shape and curvature of the function being integrated and contribute differing amounts to the final estimate and hence the weighting is determined by the addition of all these contributions, and many terms combine or cancel till a simple weighted sum is all that is required to provide an estimate that achieves acceptable accuracy given the data.
+It is worth noting the effect on error the interval size has. If one reducing the time step of a Markov model from yearly to monthly reduces the overall error of integration more than 3 decimal places as $(1/12)^3 \approx 0.0006$ for the trapezoidal method and 5 decimal places for the alternate extended Simpson's method as $(1/12)^5 \approx 0.000004$. Rescaling is a method to greatly reduce error and improve accuracy under either method.
 
-The limitations of this method are that the error is amplified a bit when encountering discontinuities in the integrated function. For example a tunnel state occupancy has a sharp non smooth boundary when it transitions from initial loading to a balance of inflow and outflow. This can occur in Markov models where the tunnel state is initially unoccupied. Further these methods also assume that the function is not "spiky" such as is seen in spectrography data [@Kalambet2018], as this can further reduce numerical accuracy. Fortunately, most health economic models do not fall into this category and the resulting functions are relatively smooth with the exception of the single point when loading a tunnel state.
+Many previous discussions have centered on explaining how the half-cycle correction works. Simpson's approach doesn't have as simple an explanation without understanding the underlying calculus, but it does come with a mathematical proof of its properties. A basic conceptual viewpoint of what is happening is that differences of the points can be used to estimate the first derivative, and the differences of those derivative estimates can be used to estimate the 2nd derivative, etc. Each of these estimates provide more information about the shape and curvature of the function being integrated and contribute differing amounts to the final estimate.  Hence, the weighting is determined by the addition of all these contributions, and many terms combine or cancel till a simple weighted sum is all that is required to provide an estimate that achieves acceptable accuracy given the data.
+
+One limitation of this method is that the error is amplified a bit when encountering discontinuities in the integrated function. For example a tunnel state occupancy has a sharp non smooth boundary when it transitions from initial loading to a balance of inflow and outflow. This can occur in Markov models where a tunnel state is initially unoccupied. Further, these methods also assume that the function is not "spiky" such as is seen in spectrography data [@Kalambet2018], as this can further reduce numerical accuracy. Fortunately, most health economic models do not fall into this category and the resulting functions are relatively smooth with the exception of the single point when loading a tunnel state.
 
 ## Example
 
-This is an extension of the Life Table example from Barendregt[@Barendregt2009] with results compared to the alternative extended Simpson's rule. In this example, we will look at a population of 1000 individuals who are aging from 0 to 10, and we are interested in their total quality of life. The population under consideration has a constant death rate of 0.52. The analytical truth of this model is easily computed as follows.
+This is an extension of the Life Table example from Barendregt (2009)  with results compared to the alternative extended Simpson's rule [@Barendregt2009]. In this example, we will look at a population of 1000 individuals who are aging from 0 to 10, and we are interested in the average total QALYs. The population under consideration has a constant death rate of 0.52. The analytical truth of this model is easily computed as follows.
 
 $$
-\int^{10}_0 1000 (1-0.52)^x dx = \left[ 1000 \frac{0.48^x} {\log(0.48)} \right]^{10}_0 \approx  1361.6
+\int^{10}_0 1000 (1-0.52)^x dx = \frac{1000}{\log(0.48)}  0.48^x \Biggr|^{10}_0 \approx  1361.6
 $$
 
 ```{r, results='asis', echo=FALSE}
@@ -96,10 +106,10 @@ df$Summary  <- c(rep("", 11), "Sum", "Absolute Error", "Percent Error")
 
 
 
-tangram(df, id="tbl1", as.character=TRUE, style="nejm", caption="Barendregt Life Table Compared with Simpson's Method")
+tangram(df, id="tbl1", as.character=TRUE, style="nejm", caption="Barendregt Life Table Compared with Simpsons Method")
 ```
 
-The Age column is the age of the participants in the population of 1000 over the model run. Living represents the number of living individuals in the model at that age. The trapezoid column is the weights from the trapezoid rule (or life table method). Lx represents the resulting contribution to the summation. The Simpson column is the weighting of the points in the alternative extended Simpson's rule followed by the Lsim which is the total contribution of living to the total life in the model. There are rows showing the summation of the column, and the resulting error from the known analytical truth of the model.
+The Age column is the age of the participants in the population of 1000 over the model run. Living represents the number of living individuals in the model at that age. The Trapezoid column is the weights from the trapezoid rule (or life table method). Lx represents the resulting contribution to the summation. The Simpson column is the weighting of the points in the alternative extended Simpson's rule followed by the Lsim which is the total contribution of living to the total life in the model. There are rows showing the summation of the column, and the resulting error from the known analytical truth of the model.
 
 In this simple example the resulting numerical error is reduced by more than an order of magnitude by switching from trapzoidal to Simpson's method!
 
@@ -109,7 +119,7 @@ In R it can easily be implemented as follows:
 
 ```
 alt_simp_coef <- function(i) c(17, 59, 43, 49, rep(48, i-8), 49, 43, 59, 17) / 48
-alt_simp      <- function(x) sum(alt_simp_coef(length(x)) * x)
+alt_simp      <- function(x,h) h*sum(alt_simp_coef(length(x)) * x)
 ```
 
 In Excel the following Macro works given a range of values:
@@ -153,4 +163,4 @@ End Function
 
 ## Conclusion
 
-In conclusion, the field of numerical intergration has long investigated the problem of integrating a function over a fixed interval as provided by the discrete Markov modeling method that is used frequently in health economic models. The idea presented by Barendregt of using Life Tables (or the earlier half-cycle correction) should be called by it's mathematical name, the trapezoidal rule, and is acceptable to improve the accuracy of estimates. If one is in pursuit of higher accuracy the trapezoidal rule should be passed over in favor of the alternative extended Simpson's rule due to it's superior numerical accuracy. It's a simple weighted sum that is easily done with a mathematical proof of behavior. In short Simpson would recommend it.
+In conclusion, the field of numerical intergration has long investigated the problem of integrating a function over a fixed interval as provided by the discrete Markov modeling method that is used frequently in health economic models. The idea presented by Barendregt of using Life Tables (or the earlier half-cycle correction) should be called by it's mathematical name, the trapezoidal rule, and is acceptable to improve the accuracy of estimates. However, if one is in pursuit of higher accuracy,  the trapezoidal rule should be passed over in favor of the alternative extended Simpson's rule due to its superior numerical accuracy. It's a simple weighted sum that is easily done with a mathematical proof of behavior. In short, Simpson would recommend it.
