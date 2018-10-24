@@ -1,0 +1,36 @@
+REM  *****  BASIC  *****
+
+Function Simpson(values As Array)
+  
+  Dim sum    As Double
+  Dim begin  As Long
+  Dim final  As Long
+  
+  begin = LBound(values)
+  final = UBound(values)
+  
+  If final - begin < 8 Then
+    Err.Raise 9,"Simpson()","Need 9 or more points to integrate"
+  End If
+  
+  
+  sum = 0.0
+  sum = 17*values(begin  ,1)/48 + _
+        59*values(begin+1,1)/48 + _
+        43*values(begin+2,1)/48 + _
+        49*values(begin+3,1)/48 + _
+        49*values(final-3,1)/48 + _
+        43*values(final-2,1)/48 + _
+        59*values(final-1,1)/48 + _
+        17*values(final  ,1)/48
+   
+  
+  For i = begin+4 to final-4
+    sum = sum + values(i,1)
+  Next
+  
+
+  Simpson = sum
+  
+
+End Function
