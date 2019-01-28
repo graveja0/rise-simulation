@@ -1,0 +1,12 @@
+setwd("~/Box Syn/*temp/DEDE")
+setwd("~/Box Sync/*temp/DEDE")
+source("dede_run.R")
+for(i in seq(1:10)) {#
+        interval <- 12#
+        fold <- 1#
+        vrr <- 7#
+        tm <- i#
+        source("~/Box Sync/*temp/DEDE/dede_test.R")#
+        re <- list(raw=list(standard=none,genotype=single),icer=list(standard=standard,genotype=genotype,icer=round( (standard[1] - genotype[1]) / (standard[2] - genotype[2]) , 1)))#
+        save(re,file=paste0("~/Box Sync/*temp/DEDE/dede_rb",tm,".rda"))#
+}
