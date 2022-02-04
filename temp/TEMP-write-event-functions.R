@@ -83,11 +83,11 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not have") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_A']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_A']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
-          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_A", 1) %>% mark("single_test_SC_A") %>% set_attribute("aOrdered_test_SC_A", 1)
+          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_A", 1) %>% mark("single_test") %>% set_attribute("aOrdered_test_SC_A", 1)
           ), 
           trajectory("have test results") %>%  timeout(0)
           )
@@ -99,8 +99,8 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not panel tested") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_A']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_A']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
           trajectory("order reactive test") %>% panel_test() %>% set_attribute("aOrdered_test_SC_A", 1)
@@ -123,11 +123,11 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not have") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_B']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_B']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
-          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_B", 1) %>% mark("single_test_SC_B") %>% set_attribute("aOrdered_test_SC_B", 1)
+          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_B", 1) %>% mark("single_test") %>% set_attribute("aOrdered_test_SC_B", 1)
           ), 
           trajectory("have test results") %>%  timeout(0)
           )
@@ -139,8 +139,8 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not panel tested") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_B']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_B']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
           trajectory("order reactive test") %>% panel_test() %>% set_attribute("aOrdered_test_SC_B", 1)
@@ -163,11 +163,11 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not have") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_C']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_C']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
-          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_C", 1) %>% mark("single_test_SC_C") %>% set_attribute("aOrdered_test_SC_C", 1)
+          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_C", 1) %>% mark("single_test") %>% set_attribute("aOrdered_test_SC_C", 1)
           ), 
           trajectory("have test results") %>%  timeout(0)
           )
@@ -179,8 +179,8 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not panel tested") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_C']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_C']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
           trajectory("order reactive test") %>% panel_test() %>% set_attribute("aOrdered_test_SC_C", 1)
@@ -203,11 +203,11 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not have") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_D']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_D']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
-          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_D", 1) %>% mark("single_test_SC_D") %>% set_attribute("aOrdered_test_SC_D", 1)
+          trajectory("order reactive test") %>% set_attribute("aGenotyped_SC_D", 1) %>% mark("single_test") %>% set_attribute("aOrdered_test_SC_D", 1)
           ), 
           trajectory("have test results") %>%  timeout(0)
           )
@@ -219,8 +219,8 @@ A_SC_A_reactive_strategy <- function(traj, inputs)
           continue=c(TRUE, TRUE),
           trajectory("not panel tested") %>%
           branch(
-          #function(attrs) attrs[['aControlOrder_SC_D']]+1, #use probability of ordering test
-          function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
+          function(attrs) attrs[['aControlOrder_SC_D']]+1, #use probability of ordering test
+          #function(attrs) attrs[['aControlOrder']]+1, #use probability of ordering test
           continue=c(TRUE,TRUE),
           trajectory("not order") %>% timeout(0),
           trajectory("order reactive test") %>% panel_test() %>% set_attribute("aOrdered_test_SC_D", 1)
@@ -235,8 +235,8 @@ prescribe_drug_SC_A <- function(traj,inputs)
   traj %>%
     set_attribute("aDrug_SC_A", function(attrs)
       if(attrs[["aGene_SC_A"]]==1 & attrs[["aGenotyped_SC_A"]]==1 &
-                 #(attrs[['aOrdered_test_SC_A']] == 1 | attrs[['aControlRead_SC_A']]==1))
-                  (attrs[['aOrdered_test_SC_A']] == 1 | attrs[['aControlRead']]==1))
+                 (attrs[['aOrdered_test_SC_A']] == 1 | attrs[['aControlRead_SC_A']]==1))
+                  #(attrs[['aOrdered_test_SC_A']] == 1 | attrs[['aControlRead']]==1))
                  {return(2)} else {return(1)}) %>%
                  set_attribute("aTreat_SC_A",1) %>%
                  branch(
@@ -252,8 +252,8 @@ prescribe_drug_SC_A <- function(traj,inputs)
   traj %>%
     set_attribute("aDrug_SC_B", function(attrs)
       if(attrs[["aGene_SC_B"]]==1 & attrs[["aGenotyped_SC_B"]]==1 &
-                 #(attrs[['aOrdered_test_SC_B']] == 1 | attrs[['aControlRead_SC_B']]==1))
-                  (attrs[['aOrdered_test_SC_B']] == 1 | attrs[['aControlRead']]==1))
+                 (attrs[['aOrdered_test_SC_B']] == 1 | attrs[['aControlRead_SC_B']]==1))
+                  #(attrs[['aOrdered_test_SC_B']] == 1 | attrs[['aControlRead']]==1))
                  {return(2)} else {return(1)}) %>%
                  set_attribute("aTreat_SC_B",1) %>%
                  branch(
@@ -269,8 +269,8 @@ prescribe_drug_SC_A <- function(traj,inputs)
   traj %>%
     set_attribute("aDrug_SC_C", function(attrs)
       if(attrs[["aGene_SC_C"]]==1 & attrs[["aGenotyped_SC_C"]]==1 &
-                 #(attrs[['aOrdered_test_SC_C']] == 1 | attrs[['aControlRead_SC_C']]==1))
-                  (attrs[['aOrdered_test_SC_C']] == 1 | attrs[['aControlRead']]==1))
+                 (attrs[['aOrdered_test_SC_C']] == 1 | attrs[['aControlRead_SC_C']]==1))
+                  #(attrs[['aOrdered_test_SC_C']] == 1 | attrs[['aControlRead']]==1))
                  {return(2)} else {return(1)}) %>%
                  set_attribute("aTreat_SC_C",1) %>%
                  branch(
@@ -286,8 +286,8 @@ prescribe_drug_SC_A <- function(traj,inputs)
   traj %>%
     set_attribute("aDrug_SC_D", function(attrs)
       if(attrs[["aGene_SC_D"]]==1 & attrs[["aGenotyped_SC_D"]]==1 &
-                 #(attrs[['aOrdered_test_SC_D']] == 1 | attrs[['aControlRead_SC_D']]==1))
-                  (attrs[['aOrdered_test_SC_D']] == 1 | attrs[['aControlRead']]==1))
+                 (attrs[['aOrdered_test_SC_D']] == 1 | attrs[['aControlRead_SC_D']]==1))
+                  #(attrs[['aOrdered_test_SC_D']] == 1 | attrs[['aControlRead']]==1))
                  {return(2)} else {return(1)}) %>%
                  set_attribute("aTreat_SC_D",1) %>%
                  branch(

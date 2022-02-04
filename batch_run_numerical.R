@@ -93,8 +93,8 @@ psa.run <- foreach(ii = seq(vN_PSA), .combine = rbind) %dopar%
   library(dplyr)
   model.run(config, ii, ss,times)
 }
-
-psa <- add.params(run=psa.run,parameter.draws=parameter.values$parameter.draws,run.name=ss) %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
-save(psa,file=file.path(mainDir, subDir,paste0("nber-psa-",ss,".RData")))
+# 
+# psa <- add.params(run=psa.run,parameter.draws=parameter.values$parameter.draws,run.name=ss) %>%  rename(psa_id=iteration) %>% select(-possible,-fatal_b,-living)
+# save(psa,file=file.path(mainDir, subDir,paste0("nber-psa-",ss,".RData")))
 
 

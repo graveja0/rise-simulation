@@ -1,10 +1,10 @@
 #1. Request an interactive job with salloc (see
-#                                           http://www.accre.vanderbilt.edu/?page <- id=2154#salloc )
-#                                           2. Start a screen session on the compute node
-#                                           3. Run your R process within the screen
-#                                           4. Close the screen session and log out of the compute node
-#                                           5. To interact with your process again, ssh to the compute node and reattach
-#                                           the screen.
+#   http://www.accre.vanderbilt.edu/?page <- id=2154#salloc )
+#   2. Start a screen session on the compute node
+#   3. Run your R process within the screen
+#   4. Close the screen session and log out of the compute node
+#   5. To interact with your process again, ssh to the compute node and reattach
+#   the screen.
 # ssh vmp1018
 
 
