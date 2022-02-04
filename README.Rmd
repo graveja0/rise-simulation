@@ -1,0 +1,116 @@
+---
+title: "Implications of Provider Network Design for Access, Affordability and Competition in Health Insurance"
+output:
+  xaringan::moon_reader:
+    css: [default, metropolis, metropolis-fonts] 
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+library(knitr)
+library(sp)
+library(sf)
+library(directlabels)
+library(ggrepel)
+library(tidyverse)
+
+opts_chunk$set(fig.align = "center", fig.height = 4, dpi = 300, cache = T)
+
+states <- state.abb
+
+elide_hawaii = c(5400000, -1400000)
+elide_alaska = c(-1870000, -2500000)
+states <- state.abb
+
+
+rest_of_us <-
+  sf_state %>%
+  filter(!(stusps %in% c("HI","AK")))
+
+hi_ak <- 
+  sf_state %>% 
+  filter(!(stusps %in% states[-grep("HI|AK",states)]))
+
+hawaii <- 
+  sf_state  %>%
+  filter(stusps == "HI")
+
+sp_hawaii <- sf::as_Spatial(hawaii)
+projection = proj4string(sp_hawaii)
+sp_hawaii <- maptools::elide(sp_hawaii, rotate = -35)
+sp_hawaii <- maptools::elide(sp_hawaii, shift = elide_hawaii)
+proj4string(sp_hawaii) <- CRS(projection)
+new_hawaii <- st_as_sf(sp_hawaii)
+st_crs(new_hawaii)
+
+alaska <- 
+  sf_state %>%
+  filter(stusps == "AK")
+
+sp_alaska <- sf::as_Spatial(alaska)
+projection = proj4string(sp_alaska)
+sp_alaska <- elide(sp_alaska, rotate = -50)
+sp_alaska <-
+  elide(sp_alaska, scale = max(apply(bbox(sp_alaska), 1, diff)) / 2.3)
+sp_alaska <- elide(sp_alaska, shift = elide_alaska)
+proj4string(sp_alaska) <- CRS(projection)
+new_alaska <- st_as_sf(sp_alaska)
+st_crs(new_alaska)
+
+
+st_crs(rest_of_us)
+
+out <- rbind(rest_of_us, new_alaska)
+
+us_background_plt <- 
+  out %>%
+  ggplot() + geom_sf(aes(fill = stusps),alpha = 0.1) + 
+  coord_sf(datum = NA) +
+  theme(legend.position = "non")
+  
+```
+
+```{r}
+none <- setdiff(state.abb, c("NV", "MI"))
+partial <- c("NV")
+comprehensive <- c("MI")
+other_protections  <- c(partial,comprehensive)
+
+dir_cap <- "credit-capacity-modeling/eia8602020/"
+
+# Import data 
+Plant_Y2020 <-
+  openxlsx::read.xlsx(paste0(dir_cap, "Plant_Y2020.xlsx")) %>% 
+  janitor::clean_names() %>% 
+  select(!contains("ferc") 
+         & !contains("transmission_or") 
+         & !contains("ash_impoundment"))
+
+Owner_Y2020 <-
+  openxlsx::read.xlsx(paste0(dir_cap, "Owner_Y2020.xlsx")) %>% 
+  janitor::clean_names()
+
+Utility_Y2020 <-
+  openxlsx::read.xlsx(paste0(dir_cap, "Utility_Y2020.xlsx")) %>% 
+  janitor::clean_names()
+
+df_p <- 
+  Plant_Y2020 %>% 
+  select(-utility_name, -street_address) %>%
+  left_join(Utility_Y2020, by = c("utility_id", "state", "city", "zip")) %>% 
+  select(!contains("_plants_reported"))
+
+sf_state <- 
+  read_sf("state/01_state-shape-file.shp") %>%
+  st_transform(crs = 4326) 
+
+
+  
+```
